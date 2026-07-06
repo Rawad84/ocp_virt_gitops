@@ -17,18 +17,28 @@ spec:
       name: "vm-request-{{.path.basenameNormalized}}"
     spec:
       project: default
-      source:
-        repoURL: https://github.com/Rawad84/ocp_virt_gitops.git
-        targetRevision: ocp-test
-        path: charts/vm-request
-        helm:
-          # The request file's own contents ARE this Application's Helm values.
-          # path.path is the DIRECTORY containing the matched file (the git
-          # files generator has no separate "matched filename" variable) —
-          # every group folder always contains exactly one file named
-          # request.yaml by convention, so that's concatenated literally.
-          valueFiles:
-            - "{{.path.path}}/request.yaml"
+      sources:
+        # Chart source. helm.valueFiles paths are resolved relative to THIS
+        # source's own path (charts/vm-request), not the repo root — so the
+        # request file (which lives outside the chart, under requests/) has
+        # to be referenced via the second "ref" source below instead of a
+        # plain relative path.
+        - repoURL: https://github.com/Rawad84/ocp_virt_gitops.git
+          targetRevision: ocp-test
+          path: charts/vm-request
+          helm:
+            # path.path is the DIRECTORY containing the matched file (the git
+            # files generator has no separate "matched filename" variable) —
+            # every group folder always contains exactly one file named
+            # request.yaml by convention, so that's concatenated literally.
+            # $values/ resolves against the ref source below (repo root).
+            valueFiles:
+              - "$values/{{.path.path}}/request.yaml"
+        # Ref source: same repo/revision, no path — gives $values a repo-root
+        # anchor so the chart source above can reach files outside itself.
+        - repoURL: https://github.com/Rawad84/ocp_virt_gitops.git
+          targetRevision: ocp-test
+          ref: values
       destination:
         name: "{{.cluster}}"
       syncPolicy:
