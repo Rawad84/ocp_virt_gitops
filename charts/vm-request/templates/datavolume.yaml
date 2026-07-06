@@ -8,9 +8,10 @@ metadata:
   annotations:
     argocd.argoproj.io/sync-wave: "2"
 spec:
-  source:
-    registry:
-      url: {{ $.Values.image.registryUrl | quote }}
+  sourceRef:
+    kind: DataSource
+    name: {{ required "image.dataSourceName is required" $.Values.image.dataSourceName }}
+    namespace: {{ required "image.dataSourceNamespace is required" $.Values.image.dataSourceNamespace }}
   storage:
     accessModes:
       - ReadWriteOnce

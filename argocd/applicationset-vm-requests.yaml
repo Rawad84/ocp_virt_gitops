@@ -23,8 +23,10 @@ spec:
         path: charts/vm-request
         helm:
           # The request file's own contents ARE this Application's Helm values.
+          # path.path is the directory containing the matched file; path.basename
+          # is the filename — concatenate for the full path.
           valueFiles:
-            - "{{.path.path}}"
+            - "{{.path.path}}/{{.path.basename}}"
       destination:
         name: "{{.cluster}}"
       syncPolicy:

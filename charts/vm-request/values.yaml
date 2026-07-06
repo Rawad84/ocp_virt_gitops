@@ -19,12 +19,15 @@ sizeTiers:
     memory: 8Gi
 
 image:
-  # PLACEHOLDER — confirm the real base OS containerdisk before testing
-  # against a live cluster.
-  registryUrl: "docker://quay.io/containerdisks/centos-stream:9"
+  # Clones from the cluster's existing golden-image DataSource (shipped by
+  # OpenShift Virtualization / SSP operator) instead of pulling from an
+  # external registry — no egress dependency, and stays current automatically
+  # since the DataSource's own DataImportCron keeps it up to date.
+  dataSourceName: rhel9
+  dataSourceNamespace: openshift-virtualization-os-images
 
 storage:
+  # Must be >= the backing PVC size of the DataSource above (rhel9 is 30Gi
+  # on this cluster).
   size: 30Gi
-  # PLACEHOLDER — empty means "use the cluster's default StorageClass".
-  # Set to a specific name once confirmed.
   className: ""
