@@ -23,10 +23,12 @@ spec:
         path: charts/vm-request
         helm:
           # The request file's own contents ARE this Application's Helm values.
-          # path.path is the directory containing the matched file; path.basename
-          # is the filename — concatenate for the full path.
+          # path.path is the DIRECTORY containing the matched file (the git
+          # files generator has no separate "matched filename" variable) —
+          # every group folder always contains exactly one file named
+          # request.yaml by convention, so that's concatenated literally.
           valueFiles:
-            - "{{.path.path}}/{{.path.basename}}"
+            - "{{.path.path}}/request.yaml"
       destination:
         name: "{{.cluster}}"
       syncPolicy:
