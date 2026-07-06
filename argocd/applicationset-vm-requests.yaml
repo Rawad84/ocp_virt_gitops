@@ -8,9 +8,8 @@ spec:
   goTemplateOptions: ["missingkey=error"]
   generators:
     - git:
-        # PLACEHOLDER — replace with this repo's real URL/branch once confirmed.
-        repoURL: https://REPLACE-ME.example.com/REPLACE-ME/ocp_virt_gitops.git
-        revision: main
+        repoURL: https://github.com/Rawad84/ocp_virt_gitops.git
+        revision: ocp-test
         files:
           - path: "requests/**/*.yaml"
   template:
@@ -19,9 +18,8 @@ spec:
     spec:
       project: default
       source:
-        # PLACEHOLDER — must match the generator's repoURL/revision above.
-        repoURL: https://REPLACE-ME.example.com/REPLACE-ME/ocp_virt_gitops.git
-        targetRevision: main
+        repoURL: https://github.com/Rawad84/ocp_virt_gitops.git
+        targetRevision: ocp-test
         path: charts/vm-request
         helm:
           # The request file's own contents ARE this Application's Helm values.
