@@ -41,6 +41,10 @@ spec:
           ref: values
       destination:
         name: "{{.cluster}}"
+        # CreateNamespace=true (below) creates whatever namespace is named
+        # here — without this, there's nothing for it to create, which is
+        # why the first sync attempt failed with "namespaces ... not found".
+        namespace: "{{.namespace}}"
       syncPolicy:
         automated:
           prune: true
