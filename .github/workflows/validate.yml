@@ -1,0 +1,23 @@
+name: Validate VM Requests
+
+on:
+  push:
+    branches: ["**"]
+  pull_request:
+    branches: ["**"]
+
+jobs:
+  validate:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v4
+
+      - name: Install yq
+        run: |
+          curl -sSL -o /usr/local/bin/yq https://github.com/mikefarah/yq/releases/download/v4.53.3/yq_linux_amd64
+          chmod +x /usr/local/bin/yq
+          yq --version
+
+      - name: Run request validation
+        run: ./ci/validate-request.sh
