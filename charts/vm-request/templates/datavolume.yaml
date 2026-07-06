@@ -5,8 +5,15 @@ kind: DataVolume
 metadata:
   name: {{ required "vm.name is required" .name }}-boot
   namespace: {{ required "namespace is required" $.Values.namespace }}
+  {{- /*
+  storage.bind.immediate.requested avoids a deadlock: on a WaitForFirstConsumer
+  storage class, the PVC won't bind until a pod (the VM) consumes it, but the
+  VM is sync-wave 3 and won't be created until this DataVolume reports
+  Healthy. This forces immediate binding instead.
+  */}}
   annotations:
     argocd.argoproj.io/sync-wave: "2"
+    cdi.kubevirt.io/storage.bind.immediate.requested: "true"
 spec:
   sourceRef:
     kind: DataSource
