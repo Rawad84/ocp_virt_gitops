@@ -3,8 +3,23 @@ name: Validate VM Requests
 on:
   push:
     branches: ["**"]
+    paths:
+      # NOTE: these are repo-root-relative. If this project gets copied into
+      # a subfolder of a larger monorepo, prefix each entry with that
+      # subfolder's path (e.g. "ocp-virt-gitops/requests/**"), and move this
+      # workflow file itself into the monorepo's own root .github/workflows/
+      # — GitHub only discovers workflows there, never in a subfolder.
+      - "requests/**"
+      - "ci/validate-request.sh"
+      - "argocd/registered-clusters.yaml"
+      - ".github/workflows/validate.yml"
   pull_request:
     branches: ["**"]
+    paths:
+      - "requests/**"
+      - "ci/validate-request.sh"
+      - "argocd/registered-clusters.yaml"
+      - ".github/workflows/validate.yml"
 
 jobs:
   validate:
