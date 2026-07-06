@@ -1,0 +1,62 @@
+{{- $root := . }}
+{{- range .Values.vms }}
+{{- $size := .size | default $root.Values.defaultSize }}
+{{- $tier := index $root.Values.sizeTiers $size }}
+---
+apiVersion: kubevirt.io/v1
+kind: VirtualMachine
+metadata:
+  name: {{ required "vm.name is required" .name }}
+  namespace: {{ required "namespace is required" $root.Values.namespace }}
+  annotations:
+    argocd.argoproj.io/sync-wave: "3"
+spec:
+  running: true
+  template:
+    metadata:
+      labels:
+        vm.kubevirt.io/name: {{ .name }}
+    spec:
+      domain:
+        cpu:
+          cores: {{ $tier.cpuCores }}
+        resources:
+          requests:
+            memory: {{ $tier.memory }}
+        devices:
+          interfaces:
+            - name: {{ $root.Values.network.name }}
+              bridge: {}
+          disks:
+            - name: rootdisk
+              disk:
+                bus: virtio
+            - name: cloudinitdisk
+              disk:
+                bus: virtio
+      networks:
+        - name: {{ $root.Values.network.name }}
+          multus:
+            networkName: {{ $root.Values.network.name }}
+      volumes:
+        - name: rootdisk
+          dataVolume:
+            name: {{ .name }}-boot
+        - name: cloudinitdisk
+          cloudInitNoCloud:
+            userData: |
+              #cloud-config
+              hostname: {{ .name }}
+              ssh_authorized_keys:
+                - {{ required "sshKey is required" $root.Values.sshKey }}
+            networkData: |
+              network:
+                version: 2
+                ethernets:
+                  eth0:
+                    addresses:
+                      - {{ required "vm.ip is required" .ip }}/{{ $root.Values.network.prefixLength | default 24 }}
+                    {{- if $root.Values.network.gateway }}
+                    gateway4: {{ $root.Values.network.gateway }}
+                    {{- end }}
+{{- end }}

@@ -1,0 +1,6 @@
+apiVersion: v2
+name: vm-request
+description: Renders one VM request group (NAD + DataVolume(s) + VirtualMachine(s)) from a single request file
+type: application
+version: 0.1.0
+appVersion: "0.1.0"

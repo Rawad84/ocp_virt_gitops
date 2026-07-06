@@ -1,0 +1,14 @@
+# Allowlist of cluster names known to Argo CD (i.e. already registered via
+# `argocd cluster add` or an equivalent cluster Secret in openshift-gitops).
+# ci/validate-request.sh fails the build if a request file's `cluster` field
+# isn't listed here.
+#
+# Keep this in sync BY HAND whenever a cluster is added to or removed from
+# Argo CD — it is not derived automatically, since CI is not assumed to have
+# credentials to query the Argo CD API or list cluster secrets.
+
+clusters:
+  # PLACEHOLDER — "in-cluster" is Argo CD's reserved name for the cluster it
+  # runs on itself. Replace with your real registered cluster name(s) once
+  # confirmed.
+  - in-cluster

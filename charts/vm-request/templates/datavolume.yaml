@@ -1,0 +1,23 @@
+{{- range .Values.vms }}
+---
+apiVersion: cdi.kubevirt.io/v1beta1
+kind: DataVolume
+metadata:
+  name: {{ required "vm.name is required" .name }}-boot
+  namespace: {{ required "namespace is required" $.Values.namespace }}
+  annotations:
+    argocd.argoproj.io/sync-wave: "2"
+spec:
+  source:
+    registry:
+      url: {{ $.Values.image.registryUrl | quote }}
+  storage:
+    accessModes:
+      - ReadWriteOnce
+    {{- if $.Values.storage.className }}
+    storageClassName: {{ $.Values.storage.className }}
+    {{- end }}
+    resources:
+      requests:
+        storage: {{ $.Values.storage.size }}
+{{- end }}

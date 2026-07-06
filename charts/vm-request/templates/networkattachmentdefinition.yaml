@@ -1,0 +1,20 @@
+apiVersion: k8s.cni.cncf.io/v1
+kind: NetworkAttachmentDefinition
+metadata:
+  name: {{ required "network.name is required" .Values.network.name }}
+  namespace: {{ required "namespace is required" .Values.namespace }}
+  annotations:
+    argocd.argoproj.io/sync-wave: "1"
+spec:
+  # Plain L2 bridge binding, no ipam stanza — IP assignment is handled by
+  # cloud-init from the request file, not by an in-cluster IPAM plugin.
+  config: |
+    {
+      "cniVersion": "0.3.1",
+      "name": "{{ .Values.network.name }}",
+      "type": "cnv-bridge",
+      "bridge": "{{ required "network.bridge is required" .Values.network.bridge }}"
+      {{- if .Values.network.vlan }},
+      "vlan": {{ .Values.network.vlan }}
+      {{- end }}
+    }

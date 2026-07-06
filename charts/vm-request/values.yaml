@@ -1,0 +1,30 @@
+# Chart-level defaults only. Request-specific values (cluster, namespace,
+# network, vms, sshKey) are supplied per-Application by the ApplicationSet,
+# which passes the request file itself as this chart's values — see
+# argocd/applicationset-vm-requests.yaml.
+
+defaultSize: small
+
+# CPU/memory injected directly into each VM's spec.domain — no dependency
+# on cluster-provided VirtualMachineClusterInstancetype/Preference objects.
+sizeTiers:
+  small:
+    cpuCores: 1
+    memory: 2Gi
+  medium:
+    cpuCores: 2
+    memory: 4Gi
+  large:
+    cpuCores: 4
+    memory: 8Gi
+
+image:
+  # PLACEHOLDER — confirm the real base OS containerdisk before testing
+  # against a live cluster.
+  registryUrl: "docker://quay.io/containerdisks/centos-stream:9"
+
+storage:
+  size: 30Gi
+  # PLACEHOLDER — empty means "use the cluster's default StorageClass".
+  # Set to a specific name once confirmed.
+  className: ""

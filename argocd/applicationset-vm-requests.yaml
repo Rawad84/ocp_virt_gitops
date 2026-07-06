@@ -1,0 +1,42 @@
+apiVersion: argoproj.io/v1alpha1
+kind: ApplicationSet
+metadata:
+  name: vm-requests
+  namespace: openshift-gitops
+spec:
+  goTemplate: true
+  goTemplateOptions: ["missingkey=error"]
+  generators:
+    - git:
+        # PLACEHOLDER — replace with this repo's real URL/branch once confirmed.
+        repoURL: https://REPLACE-ME.example.com/REPLACE-ME/ocp_virt_gitops.git
+        revision: main
+        files:
+          - path: "requests/**/*.yaml"
+  template:
+    metadata:
+      name: "vm-request-{{.path.basenameNormalized}}"
+    spec:
+      project: default
+      source:
+        # PLACEHOLDER — must match the generator's repoURL/revision above.
+        repoURL: https://REPLACE-ME.example.com/REPLACE-ME/ocp_virt_gitops.git
+        targetRevision: main
+        path: charts/vm-request
+        helm:
+          # The request file's own contents ARE this Application's Helm values.
+          valueFiles:
+            - "{{.path.path}}"
+      destination:
+        name: "{{.cluster}}"
+      syncPolicy:
+        automated:
+          prune: true
+          selfHeal: true
+        syncOptions:
+          # Namespace creation is idempotent and un-owned, so multiple request
+          # files may safely target the same (cluster, namespace) pair.
+          - CreateNamespace=true
+        # Deleting/renaming a request file removes this Application but does
+        # NOT cascade-delete the namespace/NAD/DataVolume/VM it created.
+        preserveResourcesOnDeletion: true
