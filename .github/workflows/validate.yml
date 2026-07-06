@@ -21,16 +21,33 @@ on:
       - "argocd/registered-clusters.yaml"
       - ".github/workflows/validate.yml"
 
+# Least-privilege default: this job only reads the repo, never writes
+# anything or calls the GitHub API, so it needs no permissions at all
+# beyond checking out code.
+permissions:
+  contents: read
+
 jobs:
   validate:
     runs-on: ubuntu-latest
+    timeout-minutes: 5
     steps:
+      # Pinned to the exact commit for v7.0.0, not the mutable "v4"/"v7" tag
+      # - a tag can be repointed at different code later; a commit SHA can't.
       - name: Check out repository
-        uses: actions/checkout@v4
+        uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
 
       - name: Install yq
+        env:
+          YQ_VERSION: v4.53.3
+          # GitHub-computed digest for this exact release asset (independent
+          # of the yq project's own release process) - verified below so a
+          # tampered or substituted binary fails the build instead of
+          # silently running.
+          YQ_SHA256: fa52a4e758c63d38299163fbdd1edfb4c4963247918bf9c1c5d31d84789eded4
         run: |
-          curl -sSL -o /usr/local/bin/yq https://github.com/mikefarah/yq/releases/download/v4.53.3/yq_linux_amd64
+          curl -sSL -o /usr/local/bin/yq "https://github.com/mikefarah/yq/releases/download/${YQ_VERSION}/yq_linux_amd64"
+          echo "${YQ_SHA256}  /usr/local/bin/yq" | sha256sum -c -
           chmod +x /usr/local/bin/yq
           yq --version
 
