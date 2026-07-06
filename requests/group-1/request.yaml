@@ -1,0 +1,25 @@
+# Example request file — proves the pipeline end to end.
+# network.bridge is the real br-flat NNCP discovered on this cluster
+# (Linux bridge over enp3s0, worker nodes). VLAN 100 is a TEST scenario —
+# br-flat itself carries no VLAN at the node/switch level, but the
+# cnv-bridge CNI plugin tags the attachment with vlan 100 directly, so
+# both VMs (same node/bridge) can reach each other over that tag. This
+# proves the pipeline mechanically; it won't route anywhere beyond the
+# node without real upstream trunk config for VLAN 100.
+
+cluster: in-cluster
+namespace: vm-example
+network:
+  name: example-net
+  bridge: br-flat
+  vlan: 100
+  prefixLength: 24
+  gateway: 192.168.100.1   # pretend gateway for the VLAN 100 test range — may not respond
+sshKey: "ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIKwYvPJvp9840BFajmIk4+ZNDGKN0XpmYoO+ix56xmyg test-key-ocp-virt-gitops-example"
+vms:
+  - name: example-vm-1
+    size: small
+    ip: 192.168.100.10
+  - name: example-vm-2
+    ip: 192.168.100.11
+    # size omitted -> falls back to defaultSize (small)
