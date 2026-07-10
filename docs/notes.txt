@@ -1,0 +1,104 @@
+With App-of-Apps, you'd have to hand-write a new Argo CD Application object for every VM request, and manually set which cluster it points to in that object. Adding a new VM request means writing two things: the request itself, and a wrapper Application to go with it.
+
+With ApplicationSet (file generator), you only ever write the one thing: the request file. Argo CD automatically scans requests/**/*.yaml, and for every file it finds, it generates the matching Application on its own — reading the cluster: field straight out of that file to decide which cluster to deploy to. No extra Argo CD objects to hand-author, ever.
+
+
+
+
+The actual difference, concretely: with ApplicationSet, that whole kind: Application block exists exactly once — as a template: in applicationset-vm-requests.yaml — and gets stamped out per matching file automatically. With app-of-apps, that block has to be duplicated (manually or via your own script/generator) once per VM group, forever. You'd essentially be rebuilding the git-files generator yourself, badly, in bash or Kustomize, just to avoid using the feature that already does it.
+
+
+
+
+Today — ApplicationSet (one shared chart):
+
+charts/vm-request/
+├── Chart.yaml
+├── values.yaml
+├── templates/
+│   ├── networkattachmentdefinition.yaml
+│   ├── datavolume.yaml
+│   └── virtualmachine.yaml
+
+requests/
+├── group-1/request.yaml     ← only this changes per VM group
+└── group-2/request.yaml     ← adding group-2 = one new file, chart untouched
+
+
+Under app-of-apps (dedicated chart per app):
+
+helm/
+├── vm-request-group-1/
+│   ├── Chart.yaml                          ← identical to group-2's, copy-pasted
+│   ├── app-values.yaml                     ← was requests/group-1/request.yaml
+│   └── templates/
+│       ├── networkattachmentdefinition.yaml   ← identical to group-2's
+│       ├── datavolume.yaml                     ← identical to group-2's
+│       └── virtualmachine.yaml                 ← identical to group-2's
+│
+└── vm-request-group-2/
+    ├── Chart.yaml                          ← identical to group-1's, copy-pasted
+    ├── app-values.yaml                     ← was requests/group-2/request.yaml
+    └── templates/
+        ├── networkattachmentdefinition.yaml   ← identical to group-1's
+        ├── datavolume.yaml                     ← identical to group-1's
+        └── virtualmachine.yaml                 ← identical to group-1's
+
+...plus the list that has to be hand-maintained to point at them:
+
+# app-values.yaml — extended with fields that don't exist today
+apps:
+  - name: vm-request-group-1
+    cluster: in-cluster        # new
+    namespace: vm-example      # new
+  - name: vm-request-group-2   # ← second edit, every single time
+    cluster: in-cluster
+    namespace: vm-example-2
+
+# application.yaml template — extended to consume them
+spec:
+  destination:
+    name: {{ .cluster | default "in-cluster" }}   # was hardcoded server
+    namespace: {{ .namespace }}                    # new
+  syncOptions:
+    - CreateNamespace=true                          # new
+
+What this means, side by side:
+
+┌────────────────────────────────┬──────────────────────────────────┬────────────────────────────────────────────────────────────┐
+│                                │      ApplicationSet (today)      │                        App-of-apps                         │
+├────────────────────────────────┼──────────────────────────────────┼────────────────────────────────────────────────────────────┤
+│ Files touched per new VM group │ 1 (requests/<name>/request.yaml) │ 2 — the request file and an entry in app-values.yaml       │
+├────────────────────────────────┼──────────────────────────────────┼────────────────────────────────────────────────────────────┤
+│ Chart/template logic           │ 1 copy, shared by all groups     │ Duplicated per group under helm/                           │
+├────────────────────────────────┼──────────────────────────────────┼────────────────────────────────────────────────────────────┤
+│ Fixing a bug in VM rendering   │ Fixed once                       │ Repeated in every group's copy                             │
+├────────────────────────────────┼──────────────────────────────────┼────────────────────────────────────────────────────────────┤
+│ Cluster/namespace targeting    │ Already built in per request     │ New fields to add to both the list and the template        │
+├────────────────────────────────┼──────────────────────────────────┼────────────────────────────────────────────────────────────┤
+│ Two people adding VMs same day │ No shared file, no conflict      │ Both editing the same array — merge conflict               │
+├────────────────────────────────┼──────────────────────────────────┼────────────────────────────────────────────────────────────┤
+│ Forgotten step                 │ Nothing to forget                │ Silent — request file sits unused, no app, no error        │
+└────────────────────────────────┴──────────────────────────────────┴────────────────────────────────────────────────────────────┘
+
+
+
+So: generator = where to look for new VM requests; source = what to actually deploy (the chart); ref = a plumbing trick to let the chart's values file live outside the chart directory. All three happen to point at the same repo today, which is why the table showed repoURL needing the same edit in all three places when the repo changes.
+
+
+
+The Problem: Helm's Blind Spots
+Normally, if Argo CD runs a Helm chart located at charts/vm-request/, and you tell it to look for a values file at requests/group-1/request.yaml, Helm will fail.
+
+Why? Because Helm searches relative to the chart directory. It will actually look for:
+charts/vm-request/requests/group-1/request.yaml ❌ (This path does not exist).
+
+The Solution: The Argo CD Multi-Source Trick
+To fix this, you have to use an Argo CD feature called Multi-Source Applications with a special pointer variable ($values).
+
+In your ApplicationSet template, you define multiple "sources." Think of it like giving Argo CD two separate map coordinates:
+
+Source 1 (The Chart): Points directly to charts/vm-request/. This is the actual code that deploys the VM.
+
+Source 2 (The Data Source): This is the "mystery block" the text is talking about. It points to the root of the repository (/) 
+and is given a nickname (a reference label) called ref: values.
