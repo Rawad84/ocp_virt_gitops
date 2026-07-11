@@ -35,19 +35,39 @@ fi
 for file in "${request_files[@]}"; do
   cluster=$(yq -r '.cluster // ""' "$file")
   namespace=$(yq -r '.namespace // ""' "$file")
-  network_name=$(yq -r '.network.name // ""' "$file")
-  network_bridge=$(yq -r '.network.bridge // ""' "$file")
   ssh_key=$(yq -r '.sshKey // ""' "$file")
   vm_count=$(yq -r '.vms // [] | length' "$file")
+  network_count=$(yq -r '.networks // [] | length' "$file")
 
   [ -z "$cluster" ] && err "$file: 'cluster' is missing"
   if [ -n "$cluster" ] && [ -z "${registered_clusters[$cluster]:-}" ]; then
     err "$file: cluster '$cluster' is not in argocd/registered-clusters.yaml"
   fi
   [ -z "$namespace" ] && err "$file: 'namespace' is missing"
-  [ -z "$network_name" ] && err "$file: 'network.name' is missing"
-  [ -z "$network_bridge" ] && err "$file: 'network.bridge' is missing"
   [ -z "$ssh_key" ] && err "$file: 'sshKey' is missing"
+
+  declare -A seen_network_names   # reset per file
+  seen_network_names=()
+
+  if [ "$network_count" -eq 0 ]; then
+    err "$file: 'networks' is missing or empty"
+  else
+    for j in $(seq 0 $((network_count - 1))); do
+      net_name=$(yq -r ".networks[$j].name // \"\"" "$file")
+      net_bridge=$(yq -r ".networks[$j].bridge // \"\"" "$file")
+
+      [ -z "$net_name" ] && err "$file: networks[$j] is missing 'name'"
+      [ -z "$net_bridge" ] && err "$file: networks[$j] (${net_name:-<unnamed>}) is missing 'bridge'"
+
+      if [ -n "$net_name" ]; then
+        if [ -n "${seen_network_names[$net_name]:-}" ]; then
+          err "$file: networks[$j] name '$net_name' duplicates another network in the same file"
+        else
+          seen_network_names[$net_name]=1
+        fi
+      fi
+    done
+  fi
 
   if [ "$vm_count" -eq 0 ]; then
     err "$file: 'vms' is missing or empty"
@@ -57,8 +77,17 @@ for file in "${request_files[@]}"; do
   for i in $(seq 0 $((vm_count - 1))); do
     vm_name=$(yq -r ".vms[$i].name // \"\"" "$file")
     vm_ip=$(yq -r ".vms[$i].ip // \"\"" "$file")
+    vm_network=$(yq -r ".vms[$i].network // \"\"" "$file")
 
     [ -z "$vm_name" ] && err "$file: vms[$i] is missing 'name'"
+
+    if [ -z "$vm_network" ]; then
+      if [ "$network_count" -gt 1 ]; then
+        err "$file: vm '${vm_name:-<unnamed>}' is missing 'network' (required when 'networks' has more than one entry)"
+      fi
+    elif [ -z "${seen_network_names[$vm_network]:-}" ]; then
+      err "$file: vm '${vm_name:-<unnamed>}' references network '$vm_network' which is not in 'networks'"
+    fi
 
     if [ -z "$vm_ip" ]; then
       err "$file: vm '${vm_name:-<unnamed>}' is missing 'ip' (no pod-network fallback exists)"

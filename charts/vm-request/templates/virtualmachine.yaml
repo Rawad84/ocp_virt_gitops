@@ -2,6 +2,23 @@
 {{- range .Values.vms }}
 {{- $size := .size | default $root.Values.defaultSize }}
 {{- $tier := index $root.Values.sizeTiers $size }}
+{{- $netName := .network }}
+{{- if not $netName }}
+  {{- if eq (len $root.Values.networks) 1 }}
+    {{- $netName = (first $root.Values.networks).name }}
+  {{- else }}
+    {{- fail (printf "vm %s: 'network' is required when networks[] has more than one entry" .name) }}
+  {{- end }}
+{{- end }}
+{{- $net := dict }}
+{{- range $root.Values.networks }}
+  {{- if eq .name $netName }}
+    {{- $net = . }}
+  {{- end }}
+{{- end }}
+{{- if not $net.name }}
+  {{- fail (printf "vm %s: network '%s' does not match any networks[].name" .name $netName) }}
+{{- end }}
 ---
 apiVersion: kubevirt.io/v1
 kind: VirtualMachine
@@ -25,7 +42,7 @@ spec:
             memory: {{ $tier.memory }}
         devices:
           interfaces:
-            - name: {{ $root.Values.network.name }}
+            - name: {{ $net.name }}
               bridge: {}
           disks:
             - name: rootdisk
@@ -35,9 +52,9 @@ spec:
               disk:
                 bus: virtio
       networks:
-        - name: {{ $root.Values.network.name }}
+        - name: {{ $net.name }}
           multus:
-            networkName: {{ $root.Values.network.name }}
+            networkName: {{ $net.name }}
       volumes:
         - name: rootdisk
           dataVolume:
@@ -55,8 +72,8 @@ spec:
                 ethernets:
                   eth0:
                     addresses:
-                      - {{ required "vm.ip is required" .ip }}/{{ $root.Values.network.prefixLength | default 24 }}
-                    {{- if $root.Values.network.gateway }}
-                    gateway4: {{ $root.Values.network.gateway }}
+                      - {{ required "vm.ip is required" .ip }}/{{ $net.prefixLength | default 24 }}
+                    {{- if $net.gateway }}
+                    gateway4: {{ $net.gateway }}
                     {{- end }}
 {{- end }}

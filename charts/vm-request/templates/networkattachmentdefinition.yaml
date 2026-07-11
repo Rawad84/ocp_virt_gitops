@@ -1,8 +1,11 @@
+{{- $_ := required "at least one networks[] entry is required" .Values.networks }}
+{{- range .Values.networks }}
+---
 apiVersion: k8s.cni.cncf.io/v1
 kind: NetworkAttachmentDefinition
 metadata:
-  name: {{ required "network.name is required" .Values.network.name }}
-  namespace: {{ required "namespace is required" .Values.namespace }}
+  name: {{ required "networks[].name is required" .name }}
+  namespace: {{ required "namespace is required" $.Values.namespace }}
   annotations:
     argocd.argoproj.io/sync-wave: "1"
 spec:
@@ -11,10 +14,11 @@ spec:
   config: |
     {
       "cniVersion": "0.3.1",
-      "name": "{{ .Values.network.name }}",
+      "name": "{{ .name }}",
       "type": "cnv-bridge",
-      "bridge": "{{ required "network.bridge is required" .Values.network.bridge }}"
-      {{- if .Values.network.vlan }},
-      "vlan": {{ .Values.network.vlan }}
+      "bridge": "{{ required "networks[].bridge is required" .bridge }}"
+      {{- if .vlan }},
+      "vlan": {{ .vlan }}
       {{- end }}
     }
+{{- end }}
