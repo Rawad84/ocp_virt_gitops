@@ -9,16 +9,21 @@ metadata:
   annotations:
     argocd.argoproj.io/sync-wave: "1"
 spec:
-  # Plain L2 bridge binding, no ipam stanza — IP assignment is handled by
-  # cloud-init from the request file, not by an in-cluster IPAM plugin.
+  # OVN-Kubernetes native localnet secondary network, no ipam stanza — IP
+  # assignment is handled by cloud-init from the request file, not by an
+  # in-cluster IPAM plugin. The VLAN's mapping to a physical uplink is
+  # configured out-of-band at the node/OVN level (bridge mappings) — this
+  # repo does not manage that, same as it never managed node-level Linux
+  # bridges under the old cnv-bridge NADs.
   config: |
     {
-      "cniVersion": "0.3.1",
+      "cniVersion": "0.4.0",
       "name": "{{ .name }}",
-      "type": "cnv-bridge",
-      "bridge": "{{ required "networks[].bridge is required" .bridge }}"
-      {{- if .vlan }},
-      "vlan": {{ .vlan }}
+      "type": "ovn-k8s-cni-overlay",
+      "netAttachDefName": "{{ $.Values.namespace }}/{{ .name }}",
+      "topology": "localnet"
+      {{- if .vlanID }},
+      "vlanID": {{ .vlanID }}
       {{- end }}
     }
 {{- end }}

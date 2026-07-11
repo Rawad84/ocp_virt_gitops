@@ -54,10 +54,8 @@ for file in "${request_files[@]}"; do
   else
     for j in $(seq 0 $((network_count - 1))); do
       net_name=$(yq -r ".networks[$j].name // \"\"" "$file")
-      net_bridge=$(yq -r ".networks[$j].bridge // \"\"" "$file")
 
       [ -z "$net_name" ] && err "$file: networks[$j] is missing 'name'"
-      [ -z "$net_bridge" ] && err "$file: networks[$j] (${net_name:-<unnamed>}) is missing 'bridge'"
 
       if [ -n "$net_name" ]; then
         if [ -n "${seen_network_names[$net_name]:-}" ]; then

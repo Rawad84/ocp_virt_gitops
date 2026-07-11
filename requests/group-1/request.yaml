@@ -1,33 +1,31 @@
 # Example request file — proves the pipeline end to end, including a group
-# with two VMs on two DIFFERENT VLANs (same cluster/namespace).
-# network.bridge is the real br-flat NNCP discovered on this cluster
-# (Linux bridge over enp3s0, worker nodes). VLANs 100/200 are a TEST
-# scenario — br-flat itself carries no VLAN at the node/switch level, but
-# the cnv-bridge CNI plugin tags each attachment directly, so VMs on the
-# SAME vlan (same node/bridge) can reach each other over that tag. This
-# proves the pipeline mechanically; it won't route anywhere beyond the
-# node without real upstream trunk config for these VLANs.
+# with two VMs on two DIFFERENT VLANs (same cluster/namespace). Networks
+# render as OVN-Kubernetes native localnet secondary networks
+# (type: ovn-k8s-cni-overlay, topology: localnet) — the vlanID's mapping to
+# a physical uplink is configured out-of-band via OVN bridge mappings on the
+# nodes; this repo does not manage that, same as it never managed node-level
+# Linux bridges under the old cnv-bridge NADs. VLANs 1412/1413 here are a
+# TEST scenario proving the pipeline mechanically — it won't route anywhere
+# without the customer's real OVN bridge-mapping config for these VLANs.
 
 cluster: in-cluster
 namespace: vm-example
 networks:
-  - name: example-net
-    bridge: br-flat
-    vlan: 100
+  - name: vlan-1412
+    vlanID: 1412
     prefixLength: 24
-    gateway: 192.168.100.1   # pretend gateway for the VLAN 100 test range — may not respond
-  - name: example-net-2
-    bridge: br-flat
-    vlan: 200
+    gateway: 192.168.100.1   # pretend gateway for the VLAN 1412 test range — may not respond
+  - name: vlan-1413
+    vlanID: 1413
     prefixLength: 24
-    gateway: 192.168.200.1   # pretend gateway for the VLAN 200 test range — may not respond
+    gateway: 192.168.200.1   # pretend gateway for the VLAN 1413 test range — may not respond
 sshKey: "ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIKwYvPJvp9840BFajmIk4+ZNDGKN0XpmYoO+ix56xmyg test-key-ocp-virt-gitops-example"
 vms:
   - name: example-vm-1
     size: small
     ip: 192.168.100.10
-    network: example-net
+    network: vlan-1412
   - name: example-vm-2
     ip: 192.168.200.11
-    network: example-net-2
+    network: vlan-1413
     # size omitted -> falls back to defaultSize (small)
