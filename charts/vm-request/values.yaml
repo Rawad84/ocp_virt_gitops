@@ -5,6 +5,13 @@
 
 defaultSize: small
 
+# Linux bridge every VLAN NAD attaches to (see templates/networkattachmentdefinition.yaml).
+# Provisioned out-of-band via a NodeNetworkConfigurationPolicy (nmstate) on
+# every node — this repo does not manage that policy. Confirmed via
+# `oc get nncp` against the target cluster; a different cluster with a
+# differently-named bridge would need this overridden per-Application.
+bridge: br-flat
+
 # CPU/memory injected directly into each VM's spec.domain — no dependency
 # on cluster-provided VirtualMachineClusterInstancetype/Preference objects.
 sizeTiers:

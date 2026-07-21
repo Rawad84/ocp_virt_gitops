@@ -42,6 +42,19 @@ spec:
             memory: {{ $tier.memory }}
         devices:
           interfaces:
+            # eth0: pod network (masquerade) - always reachable regardless of
+            # whether the VLAN below actually routes anywhere yet. AAP
+            # inventory/post-config targets this IP. ports: is required -
+            # masquerade only forwards VM-initiated traffic out by default;
+            # without it, nothing (including AAP) can open an inbound SSH
+            # connection to the VM through the pod IP.
+            - name: default
+              masquerade: {}
+              ports:
+                - name: ssh
+                  port: 22
+            # eth1: customer VLAN (bridge). Static IP when the request
+            # carries one (IPAM path), DHCP otherwise (see networkData below).
             - name: {{ $net.name }}
               bridge: {}
           disks:
@@ -52,6 +65,8 @@ spec:
               disk:
                 bus: virtio
       networks:
+        - name: default
+          pod: {}
         - name: {{ $net.name }}
           multus:
             networkName: {{ $net.name }}
@@ -71,9 +86,15 @@ spec:
                 version: 2
                 ethernets:
                   eth0:
+                    dhcp4: true
+                  eth1:
+                    {{- if .ip }}
                     addresses:
-                      - {{ required "vm.ip is required" .ip }}/{{ $net.prefixLength | default 24 }}
+                      - {{ .ip }}/{{ $net.prefixLength | default 24 }}
                     {{- if $net.gateway }}
                     gateway4: {{ $net.gateway }}
+                    {{- end }}
+                    {{- else }}
+                    dhcp4: true
                     {{- end }}
 {{- end }}

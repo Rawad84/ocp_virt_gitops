@@ -1,12 +1,11 @@
 # Example request file — proves the pipeline end to end, including a group
 # with two VMs on two DIFFERENT VLANs (same cluster/namespace). Networks
-# render as OVN-Kubernetes native localnet secondary networks
-# (type: ovn-k8s-cni-overlay, topology: localnet) — the vlanID's mapping to
-# a physical uplink is configured out-of-band via OVN bridge mappings on the
-# nodes; this repo does not manage that, same as it never managed node-level
-# Linux bridges under the old cnv-bridge NADs. VLANs 1412/1413 here are a
-# TEST scenario proving the pipeline mechanically — it won't route anywhere
-# without the customer's real OVN bridge-mapping config for these VLANs.
+# render as cnv-bridge secondary networks attached to the cluster's Linux
+# bridge (see charts/vm-request/values.yaml's `bridge` default) — the
+# bridge itself is provisioned out-of-band via a NodeNetworkConfigurationPolicy
+# (nmstate); this repo does not manage that. VLANs 1412/1413 here are a TEST
+# scenario proving the pipeline mechanically — they still need the bridge's
+# uplink to actually trunk these VLANs for real traffic to route.
 
 cluster: in-cluster
 namespace: vm-example
