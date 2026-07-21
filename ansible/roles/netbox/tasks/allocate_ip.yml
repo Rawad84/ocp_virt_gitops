@@ -1,0 +1,21 @@
+# NetBox equivalent of bluecat/tasks/allocate_ip.yml — same inputs
+# (ipam_network_id, vm_name), same output fact (ipam_allocated_ip).
+#
+# Uses NetBox's documented "available-ips" endpoint on a prefix, which
+# atomically claims the next free address — this one's on solid ground
+# (stable, well-documented NetBox core API), unlike the BlueCat side's
+# guessed operation name.
+- name: Claim next available IPv4 address from NetBox prefix
+  ansible.builtin.uri:
+    url: "{{ netbox_host }}/api/ipam/prefixes/{{ ipam_network_id }}/available-ips/"
+    method: POST
+    headers: "{{ netbox_auth_header }}"
+    body_format: json
+    body:
+      description: "{{ vm_name }}"
+    status_code: 201
+  register: _netbox_ip_assignment
+
+- name: Record allocated IP (strip the /prefixlen NetBox includes in address)
+  ansible.builtin.set_fact:
+    ipam_allocated_ip: "{{ _netbox_ip_assignment.json.address.split('/')[0] }}"

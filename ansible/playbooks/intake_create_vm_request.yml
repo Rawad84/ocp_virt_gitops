@@ -1,0 +1,207 @@
+# Front door of the pipeline: takes a VM request (however it's launched —
+# Job Template survey, API call, etc. — that's still undecided, see repo
+# discussion), optionally resolves IPs for every VM via IPAM, renders
+# requests/<group_name>/request.yaml, and commits+pushes it directly to the
+# branch ArgoCD's vm-requests ApplicationSet watches. ArgoCD takes over from
+# there — this playbook does not create the VM itself.
+#
+# IP assignment mode is controlled by use_ipam:
+#   - use_ipam: false (default) — DHCP. No IPAM backend is called; networks/
+#     vms are passed through to request.yaml as-is, and the chart's cloud-init
+#     brings up the VLAN interface with dhcp4: true instead of a static
+#     address. This is the current default while testing.
+#   - use_ipam: true — static, via IPAM. Backend is pluggable via
+#     ipam_role_name — "netbox" for testing against a NetBox stand-in, or
+#     "bluecat" once pointed at the customer's real BlueCat instance. Both
+#     roles implement the same task-file/fact contract (see
+#     ansible/roles/bluecat/tasks/ensure_network.yml for the contract
+#     definition), so switching is just this one var plus swapping which
+#     connection credential (netbox_host/netbox_token vs bluecat_host/
+#     bluecat_username/bluecat_password/bluecat_configuration) gets injected —
+#     nothing else in this playbook changes.
+#
+# Expected extra_vars:
+#   use_ipam: false                  # true once ready to test IPAM
+#   ipam_role_name: "netbox"         # or "bluecat" — only matters if use_ipam: true
+#   group_name: "group-2"            # becomes requests/<group_name>/
+#   cluster: "in-cluster"
+#   namespace: "vm-example-2"
+#   ssh_key: "ssh-ed25519 AAAA..."
+#   networks:
+#     - { name: vlan-1414, vlanID: 1414 }   # prefixLength/gateway come from IPAM when use_ipam: true
+#   vms:
+#     - { name: my-vm-1, size: small, network: vlan-1414 }
+#
+# Requires (inject via AAP credentials, not extra_vars in plaintext):
+#   netbox_host, netbox_token                                    (netbox backend, use_ipam: true only)
+#   bluecat_host, bluecat_username, bluecat_password, bluecat_configuration  (bluecat backend, use_ipam: true only)
+#   git_push_token — PAT with push access to this repo
+#   controller_host, controller_username, controller_password — this Controller instance's own API
+#
+# Also requires a Credential named "openshift-<cluster>" (e.g.
+# "openshift-in-cluster") to already exist in Controller for whatever
+# `cluster` value is passed in — same "provision first, this pipeline
+# doesn't auto-create it" contract as the NetBox/BlueCat VLANs above. That
+# credential is what lets the per-namespace inventory source (created below)
+# actually reach the target cluster's API, and is what makes pointing this
+# pipeline at a cluster AAP doesn't run on just "add another Credential",
+# not a code change.
+---
+- name: Create VM request file via IPAM allocation and push to git
+  hosts: localhost
+  connection: local
+  gather_facts: false
+
+  vars:
+    # DHCP by default - no IPAM backend is called, and VMs get their VLAN IP
+    # from a DHCP server on that VLAN rather than a static allocation.
+    # Flip to true (and set ipam_role_name) once BlueCat/NetBox is ready to
+    # test - the tasks below are unchanged, just gated on this.
+    use_ipam: false
+    ipam_role_name: "netbox"
+    vm_requests_repo_url: "https://github.com/Rawad84/ocp_virt_gitops.git"
+    vm_requests_branch: "ocp-test"
+    vm_requests_checkout_dir: "/tmp/vm-requests-intake/{{ group_name }}"
+    controller_validate_certs: true
+
+  tasks:
+    - name: Authenticate to IPAM backend
+      ansible.builtin.include_role:
+        name: "{{ ipam_role_name }}"
+        tasks_from: login.yml
+      when: use_ipam
+
+    - name: Resolve each network's subnet details from IPAM
+      ansible.builtin.include_role:
+        name: "{{ ipam_role_name }}"
+        tasks_from: ensure_network.yml
+      loop: "{{ networks }}"
+      loop_control:
+        loop_var: net_item
+      vars:
+        net_vlan_id: "{{ net_item.vlanID }}"
+        net_name: "{{ net_item.name }}"
+      register: _resolved_networks_raw
+      when: use_ipam
+
+    # include_role in a loop doesn't cleanly accumulate per-iteration facts,
+    # so re-derive the resolved list from the registered results instead of
+    # relying on the last iteration's ipam_network_* facts. Keeps the IPAM
+    # network id too, so the allocation step below can reuse this lookup
+    # instead of re-querying the backend per VM.
+    - name: Build resolved networks list from IPAM
+      ansible.builtin.set_fact:
+        resolved_networks: "{{ resolved_networks | default([]) + [item.item | combine({'prefixLength': item.ansible_facts.ipam_network_prefix_length, 'gateway': item.ansible_facts.ipam_network_gateway, 'ipamNetworkId': item.ansible_facts.ipam_network_id})] }}"
+      loop: "{{ _resolved_networks_raw.results }}"
+      loop_control:
+        label: "{{ item.item.name }}"
+      when: use_ipam
+
+    # DHCP path: no subnet details to resolve - pass networks straight
+    # through as-is (name/vlanID only, no prefixLength/gateway).
+    - name: Build resolved networks list for DHCP
+      ansible.builtin.set_fact:
+        resolved_networks: "{{ networks }}"
+      when: not use_ipam
+
+    - name: Assign the actual IP for each VM
+      ansible.builtin.include_role:
+        name: "{{ ipam_role_name }}"
+        tasks_from: allocate_ip.yml
+      loop: "{{ vms }}"
+      loop_control:
+        loop_var: vm_item
+        label: "{{ vm_item.name }}"
+      vars:
+        vm_name: "{{ vm_item.name }}"
+        ipam_network_id: "{{ (resolved_networks | selectattr('name', 'equalto', vm_item.network) | first).ipamNetworkId }}"
+      register: _vm_ip_allocations
+      when: use_ipam
+
+    - name: Build VMs list with allocated IPs from IPAM
+      ansible.builtin.set_fact:
+        vms_with_ips: "{{ vms_with_ips | default([]) + [item.item | combine({'ip': item.ansible_facts.ipam_allocated_ip})] }}"
+      loop: "{{ _vm_ip_allocations.results }}"
+      loop_control:
+        label: "{{ item.item.name }}"
+      when: use_ipam
+
+    # DHCP path: no IP to allocate - pass vms straight through as-is (no
+    # 'ip' key). The chart renders dhcp4: true for any VM without one.
+    - name: Build VMs list for DHCP
+      ansible.builtin.set_fact:
+        vms_with_ips: "{{ vms }}"
+      when: not use_ipam
+
+    - name: Clone the GitOps repo
+      ansible.builtin.git:
+        repo: "{{ vm_requests_repo_url }}"
+        dest: "{{ vm_requests_checkout_dir }}"
+        version: "{{ vm_requests_branch }}"
+        force: true
+
+    - name: Render request.yaml
+      ansible.builtin.template:
+        src: templates/request.yaml.j2
+        dest: "{{ vm_requests_checkout_dir }}/requests/{{ group_name }}/request.yaml"
+      vars:
+        networks: "{{ resolved_networks }}"
+        vms: "{{ vms_with_ips }}"
+
+    - name: Commit and push directly to {{ vm_requests_branch }}
+      ansible.builtin.shell: |
+        set -euo pipefail
+        git config user.email "aap-intake@example.internal"
+        git config user.name "AAP VM Intake"
+        git add "requests/{{ group_name }}/request.yaml"
+        git commit -m "Add VM request: {{ group_name }}"
+        git push "https://x-access-token:{{ git_push_token }}@github.com/Rawad84/ocp_virt_gitops.git" "HEAD:{{ vm_requests_branch }}"
+      args:
+        chdir: "{{ vm_requests_checkout_dir }}"
+      no_log: true
+
+    # Named after `namespace`, not `group_name` — the two are allowed to
+    # differ (see the extra_vars example above), and EDA's vm-ready rule only
+    # ever has `namespace` available off the VirtualMachineInstance event, so
+    # namespace is the only key both this playbook and EDA can agree on.
+    # Created now even though no VM exists yet - cheap, and it lets the
+    # inventory source's own `update_on_launch` handle population later
+    # instead of this playbook needing to orchestrate a sync.
+    - name: Ensure an AAP Inventory exists for this namespace
+      ansible.controller.inventory:
+        name: "{{ namespace }}"
+        organization: "Default"
+        state: present
+        controller_host: "{{ controller_host }}"
+        controller_username: "{{ controller_username }}"
+        controller_password: "{{ controller_password }}"
+        validate_certs: "{{ controller_validate_certs }}"
+
+    # source: openshift_virtualization is AAP 2.5's built-in dynamic
+    # inventory plugin for KubeVirt VMs (backed by the kubevirt.core
+    # collection). VERIFY the exact source identifier and source_vars schema
+    # against the actual installed Controller version before trusting this
+    # in production - unconfirmed against a live instance, same caveat as
+    # the BlueCat API surface and the EDA Kubernetes event source elsewhere
+    # in this repo.
+    #
+    # update_on_launch means Controller re-syncs this source immediately
+    # before any Job Template launch that uses this inventory, so a
+    # newly-created VM is discovered automatically at post-config time with
+    # no separate sync step required from the EDA rulebook.
+    - name: Ensure a dynamic inventory source discovers this namespace's VMs
+      ansible.controller.inventory_source:
+        name: "{{ namespace }}-openshift-virtualization"
+        inventory: "{{ namespace }}"
+        organization: "Default"
+        source: "openshift_virtualization"
+        credential: "openshift-{{ cluster }}"
+        update_on_launch: true
+        source_vars:
+          namespaces:
+            - "{{ namespace }}"
+        state: present
+        controller_host: "{{ controller_host }}"
+        controller_username: "{{ controller_username }}"
+        controller_password: "{{ controller_password }}"
+        validate_certs: "{{ controller_validate_certs }}"

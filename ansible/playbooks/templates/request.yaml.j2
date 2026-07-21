@@ -1,0 +1,27 @@
+{# Rendered request file — schema must match charts/vm-request's expectations
+   exactly (see requests/group-1/request.yaml for the reference example). #}
+cluster: {{ cluster }}
+namespace: {{ namespace }}
+networks:
+{% for net in networks %}
+  - name: {{ net.name }}
+    vlanID: {{ net.vlanID }}
+{% if net.prefixLength is defined and net.prefixLength %}
+    prefixLength: {{ net.prefixLength }}
+{% endif %}
+{% if net.gateway is defined and net.gateway %}
+    gateway: {{ net.gateway }}
+{% endif %}
+{% endfor %}
+sshKey: "{{ ssh_key }}"
+vms:
+{% for vm in vms %}
+  - name: {{ vm.name }}
+{% if vm.size is defined and vm.size %}
+    size: {{ vm.size }}
+{% endif %}
+{% if vm.ip is defined and vm.ip %}
+    ip: {{ vm.ip }}
+{% endif %}
+    network: {{ vm.network }}
+{% endfor %}

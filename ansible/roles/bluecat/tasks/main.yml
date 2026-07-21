@@ -1,0 +1,5 @@
+# Entry point when this role is applied directly — just authenticates.
+# ensure_network.yml and allocate_ip.yml are meant to be pulled in
+# individually (via include_tasks, looped per network/VM) from the intake
+# playbook, since each needs different loop-scoped vars.
+- ansible.builtin.include_tasks: login.yml

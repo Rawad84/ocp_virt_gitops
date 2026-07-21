@@ -1,0 +1,23 @@
+# Runs once EDA detects a VM's guest agent has connected (see
+# ../eda/rulebooks/vm-ready.yml). This is intentionally a minimal stub —
+# actual post-config requirements (packages, users, hardening, whatever)
+# haven't been defined yet. Fill in real tasks below once they are.
+#
+# Expected extra_vars (passed by the EDA rule action):
+#   vm_name, vm_namespace
+#
+# Connectivity comes from the per-namespace dynamic inventory (see
+# intake_create_vm_request.yml) rather than an in-play k8s_info lookup - EDA
+# launches this job with that inventory attached, already synced via its
+# update_on_launch setting, so `vm_name` resolves directly to a host with
+# ansible_host set to the VM's pod-network IP. ansible_user /
+# ansible_ssh_private_key_file come from the vm-ssh-key Machine credential
+# attached to the "VM Post-Configuration" Job Template.
+---
+- name: Post-configure a freshly provisioned VM
+  hosts: "{{ vm_name }}"
+  gather_facts: true
+
+  tasks:
+    - name: Confirm connectivity (replace with real post-config tasks)
+      ansible.builtin.ping:

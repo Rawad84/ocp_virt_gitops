@@ -1,0 +1,38 @@
+# Watches VirtualMachineInstance status across the cluster and launches the
+# post-config Job Template the moment a VM's guest agent connects — this is
+# a better signal than status.printableStatus == Running, which only means
+# the VM process started, not that the guest OS has finished booting.
+#
+# Requires the ansible.eda collection's Kubernetes event source. Verify the
+# exact source plugin name/options against whatever EDA collection version
+# ships with your AAP install before activating this in production.
+---
+- name: React to VM readiness
+  hosts: all
+  sources:
+    - ansible.eda.kubernetes:
+        api_version: kubevirt.io/v1
+        kind: VirtualMachineInstance
+
+  rules:
+    - name: Launch post-config once the guest agent connects
+      condition: >-
+        event.type in ["ADDED", "MODIFIED"] and
+        event.resource.status.conditions is defined and
+        event.resource.status.conditions
+          | selectattr("type", "equalto", "AgentConnected")
+          | selectattr("status", "equalto", "True")
+          | list | length > 0
+      action:
+        run_job_template:
+          name: "VM Post-Configuration"
+          organization: "Default"
+          job_args:
+            # Inventory is named after namespace (see
+            # intake_create_vm_request.yml). Its source has
+            # update_on_launch: true, so Controller re-syncs it right before
+            # this job runs - no separate sync action needed here.
+            inventory: "{{ event.resource.metadata.namespace }}"
+            extra_vars:
+              vm_name: "{{ event.resource.metadata.name }}"
+              vm_namespace: "{{ event.resource.metadata.namespace }}"

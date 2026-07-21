@@ -1,0 +1,129 @@
+# Configures AAP Controller (Project, Credentials, Job Templates) so the EDA
+# rulebook has a "VM Post-Configuration" Job Template to call, and so the
+# intake playbook has a Job Template it can be launched as (front door
+# mechanism is still undecided — this just makes it launchable either from
+# the Controller UI/API or a survey, whichever gets picked).
+#
+# Run this once against your Controller instance (e.g. as a one-off job, or
+# via controller_configuration-style GitOps if you adopt that later):
+#   ansible-playbook aap-config/configure_controller.yml \
+#     -e controller_host=https://<controller-route> \
+#     -e controller_username=admin \
+#     -e controller_password=<...>
+#
+# Credentials referenced below (git-push-token, vm-ssh-key, bluecat-api) are
+# created as placeholders here — fill in real secret values through the
+# Controller UI/API, not by committing them to this file.
+---
+- name: Configure AAP Controller for the VM intake / post-config pipeline
+  hosts: localhost
+  connection: local
+  gather_facts: false
+
+  vars:
+    controller_validate_certs: true
+
+  tasks:
+    - name: Create the Project pointing at this repo's ansible/ content
+      ansible.controller.project:
+        name: "VM GitOps Ansible Content"
+        organization: "Default"
+        scm_type: git
+        scm_url: "https://github.com/Rawad84/ocp_virt_gitops.git"
+        scm_branch: "{{ vm_requests_branch | default('ocp-test') }}"
+        controller_host: "{{ controller_host }}"
+        controller_username: "{{ controller_username }}"
+        controller_password: "{{ controller_password }}"
+        validate_certs: "{{ controller_validate_certs }}"
+
+    - name: Create git push credential placeholder
+      ansible.controller.credential:
+        name: "git-push-token"
+        organization: "Default"
+        credential_type: "Source Control"
+        controller_host: "{{ controller_host }}"
+        controller_username: "{{ controller_username }}"
+        controller_password: "{{ controller_password }}"
+        validate_certs: "{{ controller_validate_certs }}"
+
+    - name: Create SSH machine credential placeholder for post-config
+      ansible.controller.credential:
+        name: "vm-ssh-key"
+        organization: "Default"
+        credential_type: "Machine"
+        controller_host: "{{ controller_host }}"
+        controller_username: "{{ controller_username }}"
+        controller_password: "{{ controller_password }}"
+        validate_certs: "{{ controller_validate_certs }}"
+
+    - name: Create BlueCat API credential placeholder
+      ansible.controller.credential:
+        name: "bluecat-api"
+        organization: "Default"
+        credential_type: "Machine"
+        controller_host: "{{ controller_host }}"
+        controller_username: "{{ controller_username }}"
+        controller_password: "{{ controller_password }}"
+        validate_certs: "{{ controller_validate_certs }}"
+
+    # Backs the per-namespace inventory sources that intake_create_vm_request.yml
+    # creates (source: openshift_virtualization). Named for the "in-cluster"
+    # test scenario used throughout this repo; managing a cluster AAP doesn't
+    # run on just means creating another "openshift-<cluster>" credential
+    # here, no code change.
+    - name: Create OpenShift/Kubernetes credential placeholder for VM inventory discovery
+      ansible.controller.credential:
+        name: "openshift-in-cluster"
+        organization: "Default"
+        credential_type: "OpenShift or Kubernetes API Bearer Token"
+        controller_host: "{{ controller_host }}"
+        controller_username: "{{ controller_username }}"
+        controller_password: "{{ controller_password }}"
+        validate_certs: "{{ controller_validate_certs }}"
+
+    # Lets the intake playbook's own ansible.controller.inventory /
+    # ansible.controller.inventory_source tasks authenticate back to this
+    # Controller instance (controller_host/controller_username/
+    # controller_password) to provision the per-namespace inventory - see
+    # intake_create_vm_request.yml.
+    - name: Create Controller API credential placeholder
+      ansible.controller.credential:
+        name: "controller-api"
+        organization: "Default"
+        credential_type: "Red Hat Ansible Automation Platform"
+        controller_host: "{{ controller_host }}"
+        controller_username: "{{ controller_username }}"
+        controller_password: "{{ controller_password }}"
+        validate_certs: "{{ controller_validate_certs }}"
+
+    - name: Create the VM Intake Job Template
+      ansible.controller.job_template:
+        name: "VM Intake"
+        organization: "Default"
+        project: "VM GitOps Ansible Content"
+        playbook: "playbooks/intake_create_vm_request.yml"
+        credentials:
+          - "git-push-token"
+          - "bluecat-api"
+          - "controller-api"
+        controller_host: "{{ controller_host }}"
+        controller_username: "{{ controller_username }}"
+        controller_password: "{{ controller_password }}"
+        validate_certs: "{{ controller_validate_certs }}"
+
+    - name: Create the VM Post-Configuration Job Template
+      ansible.controller.job_template:
+        name: "VM Post-Configuration"
+        organization: "Default"
+        project: "VM GitOps Ansible Content"
+        playbook: "playbooks/postconfig.yml"
+        credentials:
+          - "vm-ssh-key"
+        # EDA's vm-ready rule supplies a per-namespace inventory at launch
+        # (see ../eda/rulebooks/vm-ready.yml) - this must be left promptable
+        # rather than fixed, since the inventory name varies per VM request.
+        ask_inventory_on_launch: true
+        controller_host: "{{ controller_host }}"
+        controller_username: "{{ controller_username }}"
+        controller_password: "{{ controller_password }}"
+        validate_certs: "{{ controller_validate_certs }}"

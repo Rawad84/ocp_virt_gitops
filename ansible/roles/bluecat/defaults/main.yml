@@ -1,0 +1,9 @@
+# BlueCat Address Manager connection details. Override via AAP credential
+# injection (custom credential type) rather than committing real values here.
+bluecat_host: "https://bluecat.example.internal"
+bluecat_username: "changeme"
+bluecat_password: "changeme"
+
+# BAM "Configuration" object that owns the networks this pipeline manages.
+# Every VLAN's IPv4 network is expected to live under this configuration.
+bluecat_configuration: "changeme-configuration"

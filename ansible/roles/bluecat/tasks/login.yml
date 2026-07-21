@@ -1,0 +1,23 @@
+# BAM REST v2 session login. Written against BlueCat Address Manager 9.5+'s
+# /api/v2 surface — VERIFY against your actual instance's
+# {{ bluecat_host }}/api/v2/openapi.json before relying on this in
+# production; v1 (legacy SOAP-over-REST at /Services/REST/v1) uses a
+# completely different login/token shape if that's what you're running.
+- name: Authenticate to BlueCat Address Manager
+  ansible.builtin.uri:
+    url: "{{ bluecat_host }}/api/v2/sessions"
+    method: POST
+    body_format: json
+    body:
+      username: "{{ bluecat_username }}"
+      password: "{{ bluecat_password }}"
+    status_code: 201
+    validate_certs: true
+  register: _bluecat_session
+  no_log: true
+
+- name: Set auth header fact for subsequent BlueCat API calls
+  ansible.builtin.set_fact:
+    bluecat_auth_header:
+      Authorization: "Basic {{ _bluecat_session.json.basicAuthenticationCredentials }}"
+  no_log: true

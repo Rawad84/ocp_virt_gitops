@@ -1,0 +1,36 @@
+# Ensures a BlueCat IPv4Network exists for a given VLAN, treating BlueCat as
+# the source of truth for that VLAN's subnet (prefix/gateway) rather than
+# trusting whatever the requester typed. Expects these vars set by the
+# caller for each network:
+#   net_vlan_id, net_name
+#
+# Sets facts on return (shared contract with roles/netbox/ — the intake
+# playbook only ever reads these generic names, never bluecat_*):
+#   ipam_network_id, ipam_network_prefix_length, ipam_network_gateway
+#
+# Endpoint/query shape (filtering by a VLAN user-defined field) is an
+# assumption — confirm the actual UDF name your BAM instance uses to tag
+# networks with a VLAN ID, and adjust the `filter` expression accordingly.
+- name: Look up existing BlueCat network by VLAN ID
+  ansible.builtin.uri:
+    url: "{{ bluecat_host }}/api/v2/configurations/{{ bluecat_configuration }}/networks?filter=vlanId:eq({{ net_vlan_id }})"
+    method: GET
+    headers: "{{ bluecat_auth_header }}"
+    status_code: 200
+  register: _bluecat_network_lookup
+
+- name: Fail loudly if the VLAN has no corresponding BlueCat network
+  ansible.builtin.fail:
+    msg: >-
+      No BlueCat network found for VLAN {{ net_vlan_id }} ({{ net_name }}).
+      This pipeline does not auto-create subnets — provision the network in
+      BlueCat first (matching whatever VLAN-to-subnet mapping is trunked onto
+      the cluster's Linux bridge, see charts/vm-request/values.yaml's
+      `bridge` default), then re-run.
+  when: (_bluecat_network_lookup.json.data | default([]) | length) == 0
+
+- name: Record resolved network details
+  ansible.builtin.set_fact:
+    ipam_network_id: "{{ _bluecat_network_lookup.json.data[0].id }}"
+    ipam_network_prefix_length: "{{ _bluecat_network_lookup.json.data[0].range.split('/')[1] }}"
+    ipam_network_gateway: "{{ _bluecat_network_lookup.json.data[0].gateway | default('') }}"

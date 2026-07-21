@@ -1,0 +1,24 @@
+# Assigns the next available IPv4 address out of an already-resolved BlueCat
+# network (see ensure_network.yml). Expects:
+#   ipam_network_id (set by ensure_network.yml — shared contract with roles/netbox/)
+#   vm_name  — used as the BlueCat address's "name" field for traceability
+#
+# Sets fact on return: ipam_allocated_ip (shared contract with roles/netbox/)
+#
+# Operation name/payload shape is BAM-version-dependent — verify against
+# your instance before trusting this in production.
+- name: Assign next available IPv4 address from BlueCat network
+  ansible.builtin.uri:
+    url: "{{ bluecat_host }}/api/v2/networks/{{ ipam_network_id }}/assignNextAvailableIPv4Address"
+    method: POST
+    headers: "{{ bluecat_auth_header }}"
+    body_format: json
+    body:
+      name: "{{ vm_name }}"
+      action: "MAKE_STATIC"
+    status_code: 201
+  register: _bluecat_ip_assignment
+
+- name: Record allocated IP
+  ansible.builtin.set_fact:
+    ipam_allocated_ip: "{{ _bluecat_ip_assignment.json.address }}"

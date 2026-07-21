@@ -1,0 +1,5 @@
+# NetBox connection details — the standing-in-for-BlueCat instance used for
+# testing the pipeline. Override via AAP credential injection, same as the
+# bluecat role's defaults.
+netbox_host: "http://netbox.example.internal"
+netbox_token: "changeme"

@@ -1,0 +1,31 @@
+# NetBox equivalent of bluecat/tasks/ensure_network.yml — same inputs
+# (net_vlan_id, net_name), same output facts (ipam_network_id,
+# ipam_network_prefix_length, ipam_network_gateway), different API
+# underneath. Requires a NetBox VLAN object (matching vid) already linked to
+# a Prefix — this pipeline doesn't auto-create subnets, same as the BlueCat
+# side.
+#
+# NetBox's Prefix model has no built-in "gateway" concept (that's a
+# BlueCat-ism) — this assumes a custom field named "gateway" on Prefix.
+# Create it in NetBox under Customization > Custom Fields if it doesn't
+# exist yet, or adjust the lookup below to your own convention.
+- name: Look up existing NetBox prefix by VLAN ID
+  ansible.builtin.uri:
+    url: "{{ netbox_host }}/api/ipam/prefixes/?vlan_vid={{ net_vlan_id }}"
+    method: GET
+    headers: "{{ netbox_auth_header }}"
+    status_code: 200
+  register: _netbox_prefix_lookup
+
+- name: Fail loudly if the VLAN has no corresponding NetBox prefix
+  ansible.builtin.fail:
+    msg: >-
+      No NetBox prefix found for VLAN {{ net_vlan_id }} ({{ net_name }}).
+      Create the VLAN + Prefix in NetBox first, then re-run.
+  when: (_netbox_prefix_lookup.json.results | default([]) | length) == 0
+
+- name: Record resolved network details
+  ansible.builtin.set_fact:
+    ipam_network_id: "{{ _netbox_prefix_lookup.json.results[0].id }}"
+    ipam_network_prefix_length: "{{ _netbox_prefix_lookup.json.results[0].prefix.split('/')[1] }}"
+    ipam_network_gateway: "{{ _netbox_prefix_lookup.json.results[0].custom_fields.gateway | default('') }}"

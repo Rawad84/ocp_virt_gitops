@@ -1,0 +1,17 @@
+# NetBox uses a static API token (no session/login call needed), unlike
+# BlueCat's session-based auth — this task just validates the token works
+# so failures show up here instead of on the first real allocation call.
+- name: Verify NetBox API token
+  ansible.builtin.uri:
+    url: "{{ netbox_host }}/api/status/"
+    method: GET
+    headers:
+      Authorization: "Token {{ netbox_token }}"
+    status_code: 200
+  no_log: true
+
+- name: Set auth header fact for subsequent NetBox API calls
+  ansible.builtin.set_fact:
+    netbox_auth_header:
+      Authorization: "Token {{ netbox_token }}"
+  no_log: true

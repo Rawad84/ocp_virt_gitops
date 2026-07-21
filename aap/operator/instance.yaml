@@ -1,0 +1,23 @@
+# Single AnsibleAutomationPlatform CR deploys Controller + EDA + Hub as one
+# gateway-fronted stack (AAP Operator 2.4+ pattern). Field names below cover
+# the common case but DO vary by operator channel/version — before applying,
+# confirm the exact schema for what actually installed:
+#   oc explain ansibleautomationplatform.spec
+#
+# Replace <RWX_STORAGE_CLASS> with a storage class that supports
+# ReadWriteMany (needed for shared project/execution volumes).
+apiVersion: aap.ansible.com/v1alpha1
+kind: AnsibleAutomationPlatform
+metadata:
+  name: aap
+  namespace: aap
+spec:
+  controller:
+    disabled: false
+  eda:
+    disabled: false
+  hub:
+    disabled: false
+    storage_type: file
+    file_storage_storage_class: <RWX_STORAGE_CLASS>
+    file_storage_size: 10Gi

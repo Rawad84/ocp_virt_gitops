@@ -1,0 +1,6 @@
+# Dedicated namespace for the AAP Operator and the AnsibleAutomationPlatform
+# instance it manages (Controller + EDA + Hub).
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: aap
