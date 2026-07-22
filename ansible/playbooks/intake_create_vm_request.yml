@@ -97,6 +97,14 @@
         version: "{{ vm_requests_branch }}"
         force: true
 
+    # ansible.builtin.template does not create missing destination
+    # directories - requests/<group_name>/ won't exist yet for a new group.
+    - name: Ensure the requests/{{ group_name }} directory exists
+      ansible.builtin.file:
+        path: "{{ vm_requests_checkout_dir }}/requests/{{ group_name }}"
+        state: directory
+        mode: "0755"
+
     - name: Render request.yaml
       ansible.builtin.template:
         src: templates/request.yaml.j2
