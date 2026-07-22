@@ -3,7 +3,7 @@
 cluster: {{ cluster }}
 namespace: {{ namespace }}
 networks:
-{% for net in networks %}
+{% for net in render_networks %}
   - name: {{ net.name }}
     vlanID: {{ net.vlanID }}
 {% if net.prefixLength is defined and net.prefixLength %}
@@ -15,7 +15,7 @@ networks:
 {% endfor %}
 sshKey: "{{ ssh_key }}"
 vms:
-{% for vm in vms %}
+{% for vm in render_vms %}
   - name: {{ vm.name }}
 {% if vm.size is defined and vm.size %}
     size: {{ vm.size }}

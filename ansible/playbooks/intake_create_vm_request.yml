@@ -138,13 +138,19 @@
       ansible.builtin.set_fact:
         merged_vms: "{{ _existing_request.vms | default([]) | rejectattr('name', 'in', vms_with_ips | map(attribute='name') | list) | list + vms_with_ips }}"
 
+    # render_networks/render_vms (not networks/vms) - extra_vars (this Job
+    # Template's own networks/vms inputs) outrank task vars in Ansible's
+    # precedence order, so a task-level `vars: {networks: ..., vms: ...}`
+    # override under those same names is silently ignored and the template
+    # ends up rendering the raw incoming networks/vms instead of the merged
+    # result. Distinct names sidestep the collision entirely.
     - name: Render request.yaml
       ansible.builtin.template:
         src: templates/request.yaml.j2
         dest: "{{ vm_requests_checkout_dir }}/requests/{{ group_name }}/request.yaml"
       vars:
-        networks: "{{ merged_networks }}"
-        vms: "{{ merged_vms }}"
+        render_networks: "{{ merged_networks }}"
+        render_vms: "{{ merged_vms }}"
 
     - name: Commit and push directly to {{ vm_requests_branch }}
       ansible.builtin.shell: |
