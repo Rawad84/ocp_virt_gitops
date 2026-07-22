@@ -120,7 +120,7 @@
         credentials:
           - "vm-ssh-key"
         # EDA's vm-ready rule supplies a per-namespace inventory at launch
-        # (see ../eda/rulebooks/vm-ready.yml) - this must be left promptable
+        # (see ../../extensions/eda/rulebooks/vm-ready.yml) - this must be left promptable
         # rather than fixed, since the inventory name varies per VM request.
         ask_inventory_on_launch: true
         controller_host: "{{ controller_host }}"

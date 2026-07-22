@@ -1,5 +1,5 @@
 # Runs once EDA detects a VM's guest agent has connected (see
-# ../eda/rulebooks/vm-ready.yml). This is intentionally a minimal stub —
+# ../../extensions/eda/rulebooks/vm-ready.yml). This is intentionally a minimal stub —
 # actual post-config requirements (packages, users, hardening, whatever)
 # haven't been defined yet. Fill in real tasks below once they are.
 #
