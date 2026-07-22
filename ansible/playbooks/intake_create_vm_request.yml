@@ -123,7 +123,7 @@
         git push "https://x-access-token:{{ git_push_token }}@github.com/Rawad84/ocp_virt_gitops.git" "HEAD:{{ vm_requests_branch }}"
       args:
         chdir: "{{ vm_requests_checkout_dir }}"
-      no_log: true
+      no_log: false
 
     # Named after `namespace`, not `group_name` — the two are allowed to
     # differ (see the extra_vars example above), and EDA's vm-ready rule only
