@@ -1,0 +1,57 @@
+# Only ever loaded via include_tasks with `when: use_ipam` on the include
+# itself (see intake_create_vm_request.yml) - none of the tasks in here need
+# their own `when`, and none should get one. Putting `when: use_ipam`
+# directly on the looped tasks below (instead of gating the include) produces
+# one skip-artifact per loop item instead of cleanly not running, and the
+# next task then fails templating a label field those artifacts don't have -
+# `include_tasks` evaluates its own `when` once, before these loops are even
+# loaded into the play, which is what actually avoids that.
+---
+- name: Authenticate to IPAM backend
+  ansible.builtin.include_role:
+    name: "{{ ipam_role_name }}"
+    tasks_from: login.yml
+
+- name: Resolve each network's subnet details from IPAM
+  ansible.builtin.include_role:
+    name: "{{ ipam_role_name }}"
+    tasks_from: ensure_network.yml
+  loop: "{{ networks }}"
+  loop_control:
+    loop_var: net_item
+  vars:
+    net_vlan_id: "{{ net_item.vlanID }}"
+    net_name: "{{ net_item.name }}"
+  register: _resolved_networks_raw
+
+# include_role in a loop doesn't cleanly accumulate per-iteration facts, so
+# re-derive the resolved list from the registered results instead of relying
+# on the last iteration's ipam_network_* facts. Keeps the IPAM network id
+# too, so the allocation step below can reuse this lookup instead of
+# re-querying the backend per VM.
+- name: Build resolved networks list from IPAM
+  ansible.builtin.set_fact:
+    resolved_networks: "{{ resolved_networks | default([]) + [item.item | combine({'prefixLength': item.ansible_facts.ipam_network_prefix_length, 'gateway': item.ansible_facts.ipam_network_gateway, 'ipamNetworkId': item.ansible_facts.ipam_network_id})] }}"
+  loop: "{{ _resolved_networks_raw.results }}"
+  loop_control:
+    label: "{{ item.item.name }}"
+
+- name: Assign the actual IP for each VM
+  ansible.builtin.include_role:
+    name: "{{ ipam_role_name }}"
+    tasks_from: allocate_ip.yml
+  loop: "{{ vms }}"
+  loop_control:
+    loop_var: vm_item
+    label: "{{ vm_item.name }}"
+  vars:
+    vm_name: "{{ vm_item.name }}"
+    ipam_network_id: "{{ (resolved_networks | selectattr('name', 'equalto', vm_item.network) | first).ipamNetworkId }}"
+  register: _vm_ip_allocations
+
+- name: Build VMs list with allocated IPs from IPAM
+  ansible.builtin.set_fact:
+    vms_with_ips: "{{ vms_with_ips | default([]) + [item.item | combine({'ip': item.ansible_facts.ipam_allocated_ip})] }}"
+  loop: "{{ _vm_ip_allocations.results }}"
+  loop_control:
+    label: "{{ item.item.name }}"
