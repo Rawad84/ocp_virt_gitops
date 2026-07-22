@@ -5,6 +5,12 @@
 # branch ArgoCD's vm-requests ApplicationSet watches. ArgoCD takes over from
 # there — this playbook does not create the VM itself.
 #
+# Adding a VM to a group that already has one: only pass the new VM (and any
+# new network it needs) in extra_vars, not the group's existing VMs/networks
+# too — this playbook merges by `name` with whatever's already in that
+# group's request.yaml (existing entries are kept, a name collision lets this
+# run's version win) rather than overwriting the file outright.
+#
 # IP assignment mode is controlled by use_ipam:
 #   - use_ipam: false (default) — DHCP. No IPAM backend is called; networks/
 #     vms are passed through to request.yaml as-is, and the chart's cloud-init
@@ -105,13 +111,40 @@
         state: directory
         mode: "0755"
 
+    - name: Check for an existing request.yaml for this group
+      ansible.builtin.stat:
+        path: "{{ vm_requests_checkout_dir }}/requests/{{ group_name }}/request.yaml"
+      register: _existing_request_file
+
+    # Callers only ever submit what's new/changed for this launch - not the
+    # group's full history - so an existing request.yaml (adding a VM to a
+    # group that already has one) must be merged with, not replaced. Render
+    # (below) would otherwise overwrite the file with only this run's
+    # networks/vms and silently drop every previously-added VM, which ArgoCD
+    # would then read as "delete that VM" on its next sync.
+    - name: Load existing request.yaml for this group, if any
+      ansible.builtin.set_fact:
+        _existing_request: "{{ (lookup('file', vm_requests_checkout_dir + '/requests/' + group_name + '/request.yaml') | from_yaml) if _existing_request_file.stat.exists else {'networks': [], 'vms': []} }}"
+
+    # Merge by `name`: this run's entries win on a name collision (so
+    # re-submitting a network/VM updates it in place), anything from the
+    # existing file whose name isn't in this run's list is carried over
+    # untouched.
+    - name: Merge this run's networks with the group's existing networks
+      ansible.builtin.set_fact:
+        merged_networks: "{{ _existing_request.networks | default([]) | rejectattr('name', 'in', resolved_networks | map(attribute='name') | list) | list + resolved_networks }}"
+
+    - name: Merge this run's VMs with the group's existing VMs
+      ansible.builtin.set_fact:
+        merged_vms: "{{ _existing_request.vms | default([]) | rejectattr('name', 'in', vms_with_ips | map(attribute='name') | list) | list + vms_with_ips }}"
+
     - name: Render request.yaml
       ansible.builtin.template:
         src: templates/request.yaml.j2
         dest: "{{ vm_requests_checkout_dir }}/requests/{{ group_name }}/request.yaml"
       vars:
-        networks: "{{ resolved_networks }}"
-        vms: "{{ vms_with_ips }}"
+        networks: "{{ merged_networks }}"
+        vms: "{{ merged_vms }}"
 
     - name: Commit and push directly to {{ vm_requests_branch }}
       ansible.builtin.shell: |
@@ -119,7 +152,7 @@
         git config user.email "aap-intake@example.internal"
         git config user.name "AAP VM Intake"
         git add "requests/{{ group_name }}/request.yaml"
-        git commit -m "Add VM request: {{ group_name }}"
+        git commit -m "Update VM request: {{ group_name }}"
         git push "https://x-access-token:{{ git_push_token }}@github.com/Rawad84/ocp_virt_gitops.git" "HEAD:{{ vm_requests_branch }}"
       args:
         chdir: "{{ vm_requests_checkout_dir }}"
