@@ -54,11 +54,14 @@
 # Also requires a Credential named "openshift-<cluster>" (e.g.
 # "openshift-in-cluster") to already exist in Controller for whatever
 # `cluster` value is passed in — same "provision first, this pipeline
-# doesn't auto-create it" contract as the NetBox/BlueCat VLANs above. That
-# credential is what lets the per-namespace inventory source (created below)
-# actually reach the target cluster's API, and is what makes pointing this
-# pipeline at a cluster AAP doesn't run on just "add another Credential",
-# not a code change.
+# doesn't auto-create it" contract as the NetBox/BlueCat VLANs above. Used in
+# two places, both by name, never statically attached to a Job Template (so
+# a different `cluster` value can't accidentally use the wrong cluster's
+# credential): the per-namespace inventory source below, and passed as
+# `credentials: ["openshift-{{ cluster }}"]` at launch time to "VM Wait For
+# Ready" and "VM Post-Configuration" (see tasks/wait_and_configure_vm.yml).
+# This is what makes pointing this pipeline at a cluster AAP doesn't run on
+# just "add another Credential", not a code change.
 ---
 - name: Create VM request file via IPAM allocation and push to git
   hosts: localhost

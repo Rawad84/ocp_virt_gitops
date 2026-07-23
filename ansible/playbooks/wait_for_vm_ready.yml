@@ -1,0 +1,34 @@
+# Launched once per new VM by intake_create_vm_request.yml (via
+# tasks/wait_and_configure_vm.yml) as its own Job Template, rather than
+# running inline as part of VM Intake - this is what lets the caller pass
+# credentials: ["openshift-{{ cluster }}"] by name at launch time (Job
+# Templates only accept launch-time credential overrides for templates with
+# ask_credential_on_launch: true), instead of being locked to whatever
+# credential happens to be statically attached. Same reason
+# postconfig.yml's own cluster-API tasks work the same way. This keeps the
+# "point this pipeline at a different cluster = create another
+# openshift-<cluster> credential, no code change" contract intact - a
+# credential statically attached to a Job Template can't vary per launch.
+#
+# Expected extra_vars: vm_name, vm_namespace
+---
+- name: Wait for a VM's guest agent to connect
+  hosts: localhost
+  connection: local
+  gather_facts: false
+
+  tasks:
+    - name: "Wait for {{ vm_name }}'s guest agent to connect"
+      kubernetes.core.k8s_info:
+        api_version: kubevirt.io/v1
+        kind: VirtualMachineInstance
+        name: "{{ vm_name }}"
+        namespace: "{{ vm_namespace }}"
+      register: _vmi_ready_check
+      until: >-
+        _vmi_ready_check.resources | default([]) | length > 0
+        and (_vmi_ready_check.resources[0].status.conditions | default([])
+             | selectattr('type', 'equalto', 'AgentConnected')
+             | selectattr('status', 'equalto', 'True') | list | length > 0)
+      retries: "{{ vm_ready_max_retries | default(60) }}"
+      delay: "{{ vm_ready_retry_delay_seconds | default(10) }}"

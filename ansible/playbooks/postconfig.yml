@@ -7,10 +7,13 @@
 # configured in a prior run): the first task checks the parent VM object
 # (not the VMI - a VMI is deleted/recreated on stop/start, so it can't carry
 # a durable marker) for the vm-gitops.io/post-config-applied annotation and
-# skips the rest of the play if it's already set. Requires the
-# "openshift-in-cluster" credential attached to the "VM Post-Configuration"
-# Job Template alongside vm-ssh-key (see ../aap-config/configure_controller.yml)
-# so the delegate_to: localhost kubernetes.core tasks below can reach the
+# skips the rest of the play if it's already set. Requires a cluster-API
+# credential (e.g. "openshift-in-cluster") passed by name as `credentials`
+# at launch time - not statically attached, since the "VM Post-Configuration"
+# Job Template has ask_credential_on_launch: true precisely so this works
+# unmodified against whatever cluster the request targets (see
+# ../aap-config/configure_controller.yml and tasks/wait_and_configure_vm.yml)
+# - so the delegate_to: localhost kubernetes.core tasks below can reach the
 # cluster API, and the aap-vm-inventory ClusterRole's patch/update verb on
 # virtualmachines (see ../../aap/rbac/vm-inventory-serviceaccount.yaml).
 #

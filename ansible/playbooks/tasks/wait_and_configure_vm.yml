@@ -1,35 +1,40 @@
 # Included once per VM in this run's vms_with_ips loop (see
-# intake_create_vm_request.yml) - waits for that one VM's guest agent to
-# connect, then launches "VM Post-Configuration" for it and waits for that
-# job to finish. The calling loop wraps this with ignore_errors: true so one
-# VM being slow/stuck doesn't block post-config from still being applied to
-# the other new VMs in the same request.
+# intake_create_vm_request.yml) - launches "VM Wait For Ready" for it, then
+# "VM Post-Configuration". Both are launched with credentials:
+# ["openshift-{{ cluster }}"] passed by name at launch time (not a
+# statically-attached credential) so this works unmodified against whatever
+# cluster the request targets - same "openshift-<cluster>" naming/lookup
+# convention the inventory_source task above already uses. The calling loop
+# wraps this with ignore_errors: true so one VM being slow/stuck doesn't
+# block post-config from still being applied to the other new VMs in the
+# same request.
+#
+# No explicit controller_host/controller_username/controller_password on
+# either job_launch below - same reasoning as the inventory/inventory_source
+# tasks above: the "controller-api" Credential injects CONTROLLER_HOST/
+# CONTROLLER_USERNAME/CONTROLLER_PASSWORD as environment variables, and
+# ansible.controller modules fall back to those automatically when the
+# module params are omitted.
 ---
-- name: "Wait for {{ vm_item.name }}'s guest agent to connect"
-  kubernetes.core.k8s_info:
-    api_version: kubevirt.io/v1
-    kind: VirtualMachineInstance
-    name: "{{ vm_item.name }}"
-    namespace: "{{ namespace }}"
-  register: _vmi_ready_check
-  until: >-
-    _vmi_ready_check.resources | default([]) | length > 0
-    and (_vmi_ready_check.resources[0].status.conditions | default([])
-         | selectattr('type', 'equalto', 'AgentConnected')
-         | selectattr('status', 'equalto', 'True') | list | length > 0)
-  retries: "{{ vm_ready_max_retries }}"
-  delay: "{{ vm_ready_retry_delay_seconds }}"
+- name: "Wait for {{ vm_item.name }} to be ready"
+  ansible.controller.job_launch:
+    job_template: "VM Wait For Ready"
+    credentials:
+      - "openshift-{{ cluster }}"
+    extra_vars:
+      vm_name: "{{ vm_item.name }}"
+      vm_namespace: "{{ namespace }}"
+      vm_ready_max_retries: "{{ vm_ready_max_retries }}"
+      vm_ready_retry_delay_seconds: "{{ vm_ready_retry_delay_seconds }}"
+    wait: true
+    validate_certs: "{{ controller_validate_certs }}"
 
-# No explicit controller_host/controller_username/controller_password here -
-# same reasoning as the inventory/inventory_source tasks above: the
-# "controller-api" Credential injects CONTROLLER_HOST/CONTROLLER_USERNAME/
-# CONTROLLER_PASSWORD as environment variables, and ansible.controller
-# modules fall back to those automatically when the module params are
-# omitted.
 - name: "Launch VM Post-Configuration for {{ vm_item.name }}"
   ansible.controller.job_launch:
     job_template: "VM Post-Configuration"
     inventory: "{{ namespace }}"
+    credentials:
+      - "openshift-{{ cluster }}"
     extra_vars:
       vm_name: "{{ vm_item.name }}"
       vm_namespace: "{{ namespace }}"
