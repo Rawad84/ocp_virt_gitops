@@ -1,0 +1,10 @@
+cluster: in-cluster
+namespace: vm-example-3
+networks:
+  - name: vlan-1415
+    vlanID: 1415
+sshKey: "ssh-rsa AAAAB3NzaC1yc2EAAAADAQABAAACAQCigtC5FH7k9IPrIo5C8HVV3Z6yx1AdDM7OiYComj98xrCBMFGYXmV4/KMUMxLwFdSmkrmuLHhF3UfWe+EZxG26FV/PFbmH6r3O8OuVOo8aMrQuhDIoT6nyg/mJpN/V2Mhm4+/69MAkz7r+fS+Dv+Phs6ocCUkx+LRCQMhsdM/7FwAqxHr0cun20CzfIq2FhC30nvj3iuwddjWZiNsRId5OLgmUs8lvWd3sj/j4IJaFHABFjj255y8Oq032aR5/DRhH8OSyINgQ1CpXQeWvyt0/ZkmMs/M5vZIu5BzAjqqS6vE49Wka0ouMQ7E8KLCoWWrUzsLgW2s56BDryamU2UjayliJb2LBiUy11JrtvfWMfLv4lAzpvD+yjlQVGSDbYB4FPwZ0QnC6T7HKz701W0QrxSzKB3gbrRRIBoUNNqVHZBhG17Dcr64l43VM7ozy6JiMexiNQ57l6JgIM3IBLYvFikOG/4Spv4ljmr9wYTtxFjTzLPpqQosUhvFoVbdD1CTPjZJhFa+yiMHquXYyHB6gk8cOcrmdr7/dDPbH1R8h4F6q6af+lUprRdcoYVHJOvjpF9kcLFm9wQNmpsw9IO3MiYsRrEwJAMOIz87kOswUP0fJjKqtUrZnNd7TRzhdT5GUAPkuuGDN5iDsCYYlok/ppJLJzhcSpnowGtllYBX6Iw== rsabbar@redhat.com"
+vms:
+  - name: test-vm-7
+    size: small
+    network: vlan-1415
