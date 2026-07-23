@@ -12,7 +12,7 @@
 #
 # Expected extra_vars: vm_name, vm_namespace
 ---
-- name: Wait for a VM's guest agent to connect
+- name: Wait for a VM to actually be reachable, not just guest-agent-connected
   hosts: localhost
   connection: local
   gather_facts: false
@@ -32,3 +32,22 @@
              | selectattr('status', 'equalto', 'True') | list | length > 0)
       retries: "{{ vm_ready_max_retries | default(60) }}"
       delay: "{{ vm_ready_retry_delay_seconds | default(10) }}"
+
+    # AgentConnected firing does not mean sshd is accepting connections yet -
+    # confirmed live: postconfig.yml's very next task (SSH-based fact
+    # gathering) hit "Connection refused" on port 22 immediately after this
+    # condition went True. Guest agent startup and sshd startup are separate
+    # races within the guest boot sequence. Wait for the actual port too,
+    # since "ready" for this pipeline means "postconfig.yml can SSH in", not
+    # just "the guest agent is up".
+    - name: "Extract {{ vm_name }}'s pod-network IP"
+      ansible.builtin.set_fact:
+        _vm_pod_ip: >-
+          {{ (_vmi_ready_check.resources[0].status.interfaces
+              | selectattr('name', 'equalto', 'default') | map(attribute='ipAddress') | first) }}
+
+    - name: "Wait for {{ vm_name }}'s SSH port to accept connections"
+      ansible.builtin.wait_for:
+        host: "{{ _vm_pod_ip }}"
+        port: 22
+        timeout: "{{ vm_ready_ssh_timeout_seconds | default(120) }}"
