@@ -11,3 +11,6 @@ vms:
   - name: test-vm-6
     size: small
     network: vlan-1415
+  - name: test-vm-7
+    size: small
+    network: vlan-1415
