@@ -104,7 +104,7 @@
         name: "VM Intake"
         organization: "Default"
         project: "VM GitOps Ansible Content"
-        playbook: "playbooks/intake_create_vm_request.yml"
+        playbook: "ansible/playbooks/intake_create_vm_request.yml"
         # Doesn't functionally matter - the playbook targets hosts: localhost
         # / connection: local regardless of what's assigned here. Set anyway
         # since Controller requires every Job Template to have one.
@@ -140,7 +140,7 @@
         name: "VM Post-Configuration"
         organization: "Default"
         project: "VM GitOps Ansible Content"
-        playbook: "playbooks/postconfig.yml"
+        playbook: "ansible/playbooks/postconfig.yml"
         execution_environment: "Day 2 EE"
         credentials:
           - "vm-ssh-key"
@@ -170,7 +170,7 @@
         name: "VM Wait For Ready"
         organization: "Default"
         project: "VM GitOps Ansible Content"
-        playbook: "playbooks/wait_for_vm_ready.yml"
+        playbook: "ansible/playbooks/wait_for_vm_ready.yml"
         # Doesn't functionally matter - the playbook targets hosts: localhost
         # / connection: local regardless of what's assigned here.
         inventory: "Demo Inventory"
