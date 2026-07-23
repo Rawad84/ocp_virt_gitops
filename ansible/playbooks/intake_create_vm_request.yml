@@ -1,9 +1,16 @@
-# Front door of the pipeline: takes a VM request (however it's launched —
-# Job Template survey, API call, etc. — that's still undecided, see repo
-# discussion), optionally resolves IPs for every VM via IPAM, renders
-# requests/<group_name>/request.yaml, and commits+pushes it directly to the
-# branch ArgoCD's vm-requests ApplicationSet watches. ArgoCD takes over from
-# there — this playbook does not create the VM itself.
+# Front door of the pipeline, and the full provisioning workflow end to end:
+# takes a VM request (however it's launched — Job Template survey, API call,
+# etc. — that's still undecided, see repo discussion), optionally resolves
+# IPs for every VM via IPAM, renders requests/<group_name>/request.yaml, and
+# commits+pushes it directly to the branch ArgoCD's vm-requests
+# ApplicationSet watches — ArgoCD creates the actual VM from there, this
+# playbook does not create it directly. Then, for each NEW VM in this run
+# only (never the group's pre-existing VMs — see the vms_with_ips vs.
+# merged_vms note near the bottom): waits for its guest agent to connect,
+# registers/refreshes it in the per-namespace AAP inventory, and launches
+# "VM Post-Configuration" for it. A rerun that only adds one more VM to an
+# already-provisioned group does not re-wait-for or re-configure the VMs
+# already there from a prior run.
 #
 # Adding a VM to a group that already has one: only pass the new VM (and any
 # new network it needs) in extra_vars, not the group's existing VMs/networks
@@ -165,9 +172,9 @@
       no_log: true
 
     # Named after `namespace`, not `group_name` — the two are allowed to
-    # differ (see the extra_vars example above), and EDA's vm-ready rule only
-    # ever has `namespace` available off the VirtualMachineInstance event, so
-    # namespace is the only key both this playbook and EDA can agree on.
+    # differ (see the extra_vars example above); namespace is the key the
+    # rest of the provisioning workflow (inventory lookups, post-config) uses
+    # to find a VM's inventory, so it's what this is named after too.
     # Created now even though no VM exists yet - cheap, and it lets the
     # inventory source's own `update_on_launch` handle population later
     # instead of this playbook needing to orchestrate a sync.
@@ -199,9 +206,12 @@
     # equivalent EE exists elsewhere.
     #
     # update_on_launch means Controller re-syncs this source immediately
-    # before any Job Template launch that uses this inventory, so a
-    # newly-created VM is discovered automatically at post-config time with
-    # no separate sync step required from the EDA rulebook.
+    # before any Job Template launch that uses this inventory - it only
+    # fires on an actual launch against this inventory, not on a timer or at
+    # creation time, so a newly-created VM won't show up here until
+    # something downstream in the workflow actually launches against it
+    # (confirmed live: this inventory sat empty until manually synced,
+    # because nothing had launched against it yet).
     - name: Ensure a dynamic inventory source discovers this namespace's VMs
       ansible.controller.inventory_source:
         name: "{{ namespace }}-openshift-virtualization"
@@ -216,3 +226,33 @@
             - "{{ namespace }}"
         state: present
         validate_certs: "{{ controller_validate_certs }}"
+
+    # Only vms_with_ips (this run's NEW VMs), never merged_vms (the group's
+    # full VM list including ones from prior runs) - a rerun that only adds
+    # a VM to an existing group must not re-wait/re-configure VMs already
+    # provisioned in a prior run, and must not touch them at all. This is
+    # the primary guarantee; postconfig.yml's own once-only annotation check
+    # is a second, independent safety net in case this scoping is ever
+    # bypassed (e.g. a manual re-launch with the wrong vm list).
+    - name: Wait for readiness and apply baseline config to this run's new VMs
+      ansible.builtin.include_tasks: tasks/wait_and_configure_vm.yml
+      loop: "{{ vms_with_ips }}"
+      loop_control:
+        loop_var: vm_item
+        label: "{{ vm_item.name }}"
+      vars:
+        vm_ready_max_retries: 60
+        vm_ready_retry_delay_seconds: 10
+      ignore_errors: true
+      register: _vm_provisioning_results
+
+    - name: Fail if any VM's readiness-wait or post-config failed
+      ansible.builtin.fail:
+        msg: >-
+          Post-provisioning failed for one or more VMs in this request:
+          {{ _vm_provisioning_results.results
+             | selectattr('failed', 'defined') | selectattr('failed')
+             | map(attribute='vm_item') | map(attribute='name') | list }}
+      when: >-
+        _vm_provisioning_results.results
+        | selectattr('failed', 'defined') | selectattr('failed') | list | length > 0

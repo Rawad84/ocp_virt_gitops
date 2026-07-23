@@ -1,8 +1,8 @@
-# Configures AAP Controller (Project, Credentials, Job Templates) so the EDA
-# rulebook has a "VM Post-Configuration" Job Template to call, and so the
-# intake playbook has a Job Template it can be launched as (front door
-# mechanism is still undecided — this just makes it launchable either from
-# the Controller UI/API or a survey, whichever gets picked).
+# Configures AAP Controller (Project, Credentials, Job Templates) so the VM
+# provisioning workflow has a "VM Post-Configuration" Job Template to call,
+# and so the intake playbook has a Job Template it can be launched as (front
+# door mechanism is still undecided — this just makes it launchable either
+# from the Controller UI/API or a survey, whichever gets picked).
 #
 # Run this once against your Controller instance (e.g. as a one-off job, or
 # via controller_configuration-style GitOps if you adopt that later):
@@ -11,9 +11,10 @@
 #     -e controller_username=admin \
 #     -e controller_password=<...>
 #
-# Credentials referenced below (git-push-token, vm-ssh-key, bluecat-api) are
-# created as placeholders here — fill in real secret values through the
-# Controller UI/API, not by committing them to this file.
+# Credentials referenced below (git-push-token, vm-ssh-key, openshift-in-cluster,
+# controller-api) are created as placeholders here — fill in real secret
+# values through the Controller UI/API, not by committing them to this file.
+# bluecat-api is deliberately NOT created here - see the task below.
 ---
 - name: Configure AAP Controller for the VM intake / post-config pipeline
   hosts: localhost
@@ -36,11 +37,16 @@
         controller_password: "{{ controller_password }}"
         validate_certs: "{{ controller_validate_certs }}"
 
+    # credential_type must be the custom "Git Push Token" type (see
+    # aap/credential-types/create-git-push-token-type.sh), not the built-in
+    # "Source Control" type - the built-in type has no injector and never
+    # actually exposes the token to a running job. See aap/LESSONS_LEARNED.md
+    # "Built-in GitHub Personal Access Token credential type has no injector".
     - name: Create git push credential placeholder
       ansible.controller.credential:
         name: "git-push-token"
         organization: "Default"
-        credential_type: "Source Control"
+        credential_type: "Git Push Token"
         controller_host: "{{ controller_host }}"
         controller_username: "{{ controller_username }}"
         controller_password: "{{ controller_password }}"
@@ -56,15 +62,11 @@
         controller_password: "{{ controller_password }}"
         validate_certs: "{{ controller_validate_certs }}"
 
-    - name: Create BlueCat API credential placeholder
-      ansible.controller.credential:
-        name: "bluecat-api"
-        organization: "Default"
-        credential_type: "Machine"
-        controller_host: "{{ controller_host }}"
-        controller_username: "{{ controller_username }}"
-        controller_password: "{{ controller_password }}"
-        validate_certs: "{{ controller_validate_certs }}"
+    # bluecat-api is intentionally NOT created here - IPAM stays disabled
+    # (use_ipam: false) for now, and creating it prematurely with no real
+    # secret values would let it be silently attached to Job Templates
+    # before it's actually meant to be used. Create it by hand (see
+    # CONTROLLER_SETUP.md "Skipped for now") once use_ipam: true is tested.
 
     # Backs the per-namespace inventory sources that intake_create_vm_request.yml
     # creates (source: openshift_virtualization). Named for the "in-cluster"
@@ -102,10 +104,31 @@
         organization: "Default"
         project: "VM GitOps Ansible Content"
         playbook: "playbooks/intake_create_vm_request.yml"
+        # Doesn't functionally matter - the playbook targets hosts: localhost
+        # / connection: local regardless of what's assigned here. Set anyway
+        # since Controller requires every Job Template to have one.
+        inventory: "Demo Inventory"
+        # Has ansible.controller available - the org/global default EE is
+        # not guaranteed to (see aap/LESSONS_LEARNED.md "Execution
+        # Environment").
+        execution_environment: "Day 2 EE"
         credentials:
           - "git-push-token"
-          - "bluecat-api"
           - "controller-api"
+          # Backs the kubernetes.core.k8s_info wait-for-ready tasks this
+          # playbook runs directly (see tasks/wait_and_configure_vm.yml) -
+          # distinct from the "openshift-{{ cluster }}" credential the
+          # inventory_source task below references by name, even though
+          # they're the same object for the one cluster tested so far.
+          - "openshift-in-cluster"
+          # add "bluecat-api" once it's created and use_ipam: true is tested
+        # group_name/cluster/namespace/ssh_key/networks/vms differ on every
+        # launch and have no defaults in the playbook - without this,
+        # Controller silently drops/rejects extra_vars passed at launch
+        # (see aap/LESSONS_LEARNED.md "Prompt on launch gotchas").
+        ask_variables_on_launch: true
+        extra_vars:
+          use_ipam: false
         controller_host: "{{ controller_host }}"
         controller_username: "{{ controller_username }}"
         controller_password: "{{ controller_password }}"
@@ -117,11 +140,17 @@
         organization: "Default"
         project: "VM GitOps Ansible Content"
         playbook: "playbooks/postconfig.yml"
+        execution_environment: "Day 2 EE"
         credentials:
           - "vm-ssh-key"
-        # EDA's vm-ready rule supplies a per-namespace inventory at launch
-        # (see ../../extensions/eda/rulebooks/vm-ready.yml) - this must be left promptable
-        # rather than fixed, since the inventory name varies per VM request.
+          # Backs postconfig.yml's delegate_to: localhost kubernetes.core
+          # tasks (annotation check + patch) - same credential/ServiceAccount
+          # as the inventory source, now also granted patch/update on
+          # virtualmachines (see ../../aap/rbac/vm-inventory-serviceaccount.yaml).
+          - "openshift-in-cluster"
+        # The per-namespace inventory varies per VM request, so it must be
+        # left promptable rather than fixed on the template - whatever
+        # launches this template (workflow node, manual, etc.) supplies it.
         ask_inventory_on_launch: true
         controller_host: "{{ controller_host }}"
         controller_username: "{{ controller_username }}"
