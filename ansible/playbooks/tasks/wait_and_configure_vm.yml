@@ -4,10 +4,18 @@
 # ["openshift-{{ cluster }}"] passed by name at launch time (not a
 # statically-attached credential) so this works unmodified against whatever
 # cluster the request targets - same "openshift-<cluster>" naming/lookup
-# convention the inventory_source task above already uses. The calling loop
-# wraps this with ignore_errors: true so one VM being slow/stuck doesn't
-# block post-config from still being applied to the other new VMs in the
-# same request.
+# convention the inventory_source task above already uses.
+#
+# VM Post-Configuration's launch-time `credentials` list must include
+# "vm-ssh-key" too, even though it's already statically attached to that
+# template - confirmed live: passing only the cluster credential fails with
+# "Removing Machine credential at launch time without replacement is not
+# supported", because a launch-time `credentials` override has to name the
+# complete desired credential set, not just the delta being added.
+#
+# The calling loop wraps this with ignore_errors: true so one VM being
+# slow/stuck doesn't block post-config from still being applied to the
+# other new VMs in the same request.
 #
 # No explicit controller_host/controller_username/controller_password on
 # either job_launch below - same reasoning as the inventory/inventory_source
@@ -34,6 +42,7 @@
     job_template: "VM Post-Configuration"
     inventory: "{{ namespace }}"
     credentials:
+      - "vm-ssh-key"
       - "openshift-{{ cluster }}"
     extra_vars:
       vm_name: "{{ vm_item.name }}"
