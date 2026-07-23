@@ -63,6 +63,36 @@
     # --- real post-config tasks go here ---
     - name: Confirm connectivity (replace with real post-config tasks)
       ansible.builtin.ping:
+
+    # Demo-visible proof that post-config actually ran, not just that the
+    # annotation got set - a login banner (seen immediately on SSH) plus a
+    # marker file (for a clean `cat` during a demo). Replace/extend once
+    # real baseline-config tasks (OS patches, hardening, agents, identity,
+    # compliance) are defined. become: true because /etc/ needs root - the
+    # golden image's default cloud-user has passwordless sudo out of the
+    # box (standard for RHEL cloud images), no explicit sudo setup needed
+    # in the chart's cloud-init.
+    - name: Write a login banner proving post-config ran
+      ansible.builtin.blockinfile:
+        path: /etc/motd
+        create: true
+        mode: "0644"
+        marker: "# {mark} vm-gitops post-config"
+        block: |
+          Post-configured by the AAP VM GitOps pipeline
+            VM:  {{ vm_name }}
+            Applied: {{ lookup('pipe', 'date -u +%Y-%m-%dT%H:%M:%SZ') }}
+      become: true
+
+    - name: Write a marker file proving post-config ran
+      ansible.builtin.copy:
+        dest: /etc/vm-gitops-post-config.txt
+        mode: "0644"
+        content: |
+          vm_name={{ vm_name }}
+          vm_namespace={{ vm_namespace }}
+          applied_at={{ lookup('pipe', 'date -u +%Y-%m-%dT%H:%M:%SZ') }}
+      become: true
     # --- end real post-config tasks ---
 
     - name: Mark this VM as post-config-applied
