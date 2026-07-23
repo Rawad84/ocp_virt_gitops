@@ -18,7 +18,14 @@
   gather_facts: false
 
   tasks:
-    - name: "Wait for {{ vm_name }}'s guest agent to connect"
+    # Also required in the same retry loop, not a separate step: right when
+    # AgentConnected first flips True, the "default" interface entry can
+    # still be missing its ipAddress (the guest agent's DHCP lease report
+    # populates slightly after the agent connection itself) - confirmed
+    # live, a second race one level earlier than the sshd one below.
+    # map(attribute='ipAddress', default='') avoids a hard failure on the
+    # attribute being absent while retrying.
+    - name: "Wait for {{ vm_name }}'s guest agent to connect and report an IP"
       kubernetes.core.k8s_info:
         api_version: kubevirt.io/v1
         kind: VirtualMachineInstance
@@ -30,16 +37,18 @@
         and (_vmi_ready_check.resources[0].status.conditions | default([])
              | selectattr('type', 'equalto', 'AgentConnected')
              | selectattr('status', 'equalto', 'True') | list | length > 0)
+        and (_vmi_ready_check.resources[0].status.interfaces | default([])
+             | selectattr('name', 'equalto', 'default')
+             | map(attribute='ipAddress', default='') | select('ne', '') | list | length > 0)
       retries: "{{ vm_ready_max_retries | default(60) }}"
       delay: "{{ vm_ready_retry_delay_seconds | default(10) }}"
 
-    # AgentConnected firing does not mean sshd is accepting connections yet -
-    # confirmed live: postconfig.yml's very next task (SSH-based fact
-    # gathering) hit "Connection refused" on port 22 immediately after this
-    # condition went True. Guest agent startup and sshd startup are separate
-    # races within the guest boot sequence. Wait for the actual port too,
-    # since "ready" for this pipeline means "postconfig.yml can SSH in", not
-    # just "the guest agent is up".
+    # AgentConnected + a reported IP still does not mean sshd is accepting
+    # connections yet - confirmed live separately: postconfig.yml's SSH-based
+    # fact gathering hit "Connection refused" on port 22 right after this
+    # condition was satisfied on an earlier attempt. Wait for the actual
+    # port too, since "ready" for this pipeline means "postconfig.yml can
+    # SSH in", not just "the guest agent is up with an IP".
     - name: "Extract {{ vm_name }}'s pod-network IP"
       ansible.builtin.set_fact:
         _vm_pod_ip: >-
