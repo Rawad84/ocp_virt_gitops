@@ -224,6 +224,14 @@
         credential: "openshift-{{ cluster }}"
         execution_environment: "Day 2 EE"
         update_on_launch: true
+        # Controller's default (false) makes syncs additive-only - a VM
+        # deleted from the cluster (e.g. by editing request.yaml and letting
+        # ArgoCD prune it) stays in the inventory forever, since a sync only
+        # adds/updates hosts it currently finds and never removes ones that
+        # disappeared. Confirmed live: deleted test VMs kept showing up
+        # alongside a genuinely new one. overwrite: true makes each sync a
+        # true mirror of what's actually in the namespace.
+        overwrite: true
         source_vars:
           namespaces:
             - "{{ namespace }}"
