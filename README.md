@@ -87,7 +87,10 @@ Run `ansible/aap-config/configure_controller.yml` to create all of this
 automatically (idempotent, safe to re-run) — see the playbook's own header
 for the exact command. It can't create real secret values, and can't run as
 a Controller Job Template on its first execution (it's what creates the
-Project/Job Templates), so a few things are still manual the first time:
+Project/Job Templates), so a few things are still manual the first time.
+Below is the short version — for the full click-by-click walkthrough (exact
+field values, why each setting is what it is), see
+[`aap/CONTROLLER_SETUP.md`](aap/CONTROLLER_SETUP.md).
 
 **Credential Type** — `Git Push Token` (the built-in GitHub PAT type has no
 injector, so it never reaches the playbook). Script:
