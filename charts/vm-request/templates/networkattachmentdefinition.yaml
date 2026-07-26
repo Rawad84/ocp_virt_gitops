@@ -1,8 +1,8 @@
 {{- $_ := required "at least one networks[] entry is required" .Values.networks }}
 {{- $clusterName := required "cluster_name is required" .Values.cluster_name }}
-{{- $bridge := index .Values.bridges $clusterName }}
-{{- if not $bridge }}
-  {{- fail (printf "no bridge configured in values.yaml for cluster_name '%s' - add an entry under bridges: (see values.yaml's own comment)" $clusterName) }}
+{{- $physnet := index .Values.bridges $clusterName }}
+{{- if not $physnet }}
+  {{- fail (printf "no physical network mapping configured in values.yaml for cluster_name '%s' - add an entry under bridges: (see values.yaml's own comment)" $clusterName) }}
 {{- end }}
 {{- range .Values.networks }}
 ---
@@ -14,22 +14,33 @@ metadata:
   annotations:
     argocd.argoproj.io/sync-wave: "1"
 spec:
-  # cnv-bridge (OpenShift Virtualization's Linux Bridge CNI addon — confirmed
-  # deployed via NetworkAddonsConfig's linuxBridge: {} and the bridge-marker/
-  # kube-cni-linux-bridge-plugin daemonsets) attaching to a Linux bridge
-  # that's already provisioned on every node via a NodeNetworkConfigurationPolicy
-  # (nmstate) — this repo does not manage that bridge itself, same as it
-  # never managed node-level VLAN-to-uplink mapping. No ipam stanza — IP
-  # assignment is handled by cloud-init from the request file, not by an
-  # in-cluster IPAM plugin.
+  # OVN-Kubernetes native localnet secondary network (type:
+  # ovn-k8s-cni-overlay, topology: localnet) - per Red Hat OCP docs
+  # ("Configuring multiple networks" > OVN-Kubernetes additional network >
+  # localnet topology). physicalNetworkName must match an OVN bridge
+  # mapping (ovn-bridge-mappings) already configured on every node of this
+  # cluster - provisioned out-of-band (nmstate NodeNetworkConfigurationPolicy
+  # setting that external-id, or equivalent), same as this repo never
+  # managed the previous cnv-bridge approach's Linux bridge or node-level
+  # VLAN-to-uplink mapping either. No ipam stanza — IP assignment is
+  # handled by cloud-init from the request file, not by an in-cluster IPAM
+  # plugin.
+  #
+  # NOT yet verified against a live cluster (built while the target cluster
+  # was down) - confirm physicalNetworkName/vlanID/netAttachDefName field
+  # names and cniVersion against this specific OCP version's actual docs
+  # (or an existing working localnet NAD on the cluster, if one exists)
+  # before relying on this in production. See aap/LESSONS_LEARNED.md.
   config: |
     {
-      "cniVersion": "0.3.1",
+      "cniVersion": "0.4.0",
       "name": "{{ .name }}",
-      "type": "cnv-bridge",
-      "bridge": "{{ $bridge }}"
+      "type": "ovn-k8s-cni-overlay",
+      "topology": "localnet",
+      "netAttachDefName": "{{ $.Values.namespace }}/{{ .name }}",
+      "physicalNetworkName": "{{ $physnet }}"
       {{- if .vlanID }},
-      "vlan": {{ .vlanID }}
+      "vlanID": {{ .vlanID }}
       {{- end }}
     }
 {{- end }}

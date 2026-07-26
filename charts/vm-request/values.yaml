@@ -5,18 +5,25 @@
 
 defaultSize: small
 
-# Linux bridge every VLAN NAD attaches to (see templates/networkattachmentdefinition.yaml),
-# keyed by cluster_name (the request file's own clear cluster identifier -
-# see ansible/playbooks/intake_create_vm_request.yml header for why this
-# isn't keyed by `cluster`) because a different cluster can have a
-# differently-named bridge. Provisioned out-of-band via a
-# NodeNetworkConfigurationPolicy (nmstate) on every node of that cluster —
-# this repo does not manage that policy, same as it never managed node-level
-# VLAN-to-uplink mapping. Confirmed via `oc get nncp` against this cluster.
-# A request whose cluster_name has no entry here fails loudly at render time
-# (see networkattachmentdefinition.yaml) rather than silently reusing
-# another cluster's bridge name. Add one entry per cluster as each is
-# onboarded.
+# OVN-Kubernetes physical network name every VLAN NAD's localnet topology
+# maps to (see templates/networkattachmentdefinition.yaml's
+# physicalNetworkName), keyed by cluster_name (the request file's own clear
+# cluster identifier - see ansible/playbooks/intake_create_vm_request.yml
+# header for why this isn't keyed by `cluster`) because a different cluster
+# has its own OVN bridge mapping (ovn-bridge-mappings), provisioned
+# out-of-band on every node - this repo does not manage that, same as it
+# never managed node-level VLAN-to-uplink mapping. A request whose
+# cluster_name has no entry here fails loudly at render time (see
+# networkattachmentdefinition.yaml) rather than silently reusing another
+# cluster's mapping. Add one entry per cluster as each is onboarded.
+#
+# "br-flat" below is carried over from this chart's prior cnv-bridge/Linux
+# bridge approach (where it WAS confirmed via `oc get nncp`) - it is NOT
+# yet confirmed as this cluster's actual OVN bridge-mapping name under the
+# new localnet approach, since that's separate cluster-level configuration
+# that may not exist yet. Verify/reconfigure against the live cluster
+# (`oc get nncp`, or whatever configures ovn-bridge-mappings on this
+# OCP version) before relying on this - see aap/LESSONS_LEARNED.md.
 bridges:
   cluster-fq2h5: br-flat
 
