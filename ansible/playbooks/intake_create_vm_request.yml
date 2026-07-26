@@ -37,7 +37,8 @@
 #   use_ipam: false                  # true once ready to test IPAM
 #   ipam_role_name: "netbox"         # or "bluecat" — only matters if use_ipam: true
 #   group_name: "group-2"            # becomes requests/<group_name>/
-#   cluster: "in-cluster"
+#   cluster: "in-cluster"            # ArgoCD destination.name - do not repurpose, see cluster_name below
+#   cluster_name: "cluster-fq2h5"    # clear/human-meaningful cluster identifier, used for AAP-side naming only
 #   namespace: "vm-example-2"
 #   ssh_key: "ssh-ed25519 AAAA..."
 #   networks:
@@ -51,17 +52,29 @@
 #   git_push_token — PAT with push access to this repo
 #   controller_host, controller_username, controller_password — this Controller instance's own API
 #
-# Also requires a Credential named "openshift-<cluster>" (e.g.
-# "openshift-in-cluster") to already exist in Controller for whatever
-# `cluster` value is passed in — same "provision first, this pipeline
+# `cluster` vs `cluster_name`: `cluster` is Argo CD's own destination
+# identifier (the ApplicationSet passes it straight through as
+# destination.name) - "in-cluster" is Argo CD's reserved name for the
+# cluster it runs on itself, and this field must stay whatever Argo CD
+# actually recognizes, not a human-friendly rename. `cluster_name` is a
+# separate, purely AAP-side label with no Argo CD meaning, used everywhere
+# a clear cluster identifier is needed for naming Controller objects
+# (inventory, credentials) - this is what makes those names
+# multi-cluster-legible even while every environment tested so far still
+# has `cluster: in-cluster`.
+#
+# Also requires a Credential named "openshift-<cluster_name>" (e.g.
+# "openshift-cluster-fq2h5") to already exist in Controller for whatever
+# `cluster_name` value is passed in — same "provision first, this pipeline
 # doesn't auto-create it" contract as the NetBox/BlueCat VLANs above. Used in
 # two places, both by name, never statically attached to a Job Template (so
-# a different `cluster` value can't accidentally use the wrong cluster's
-# credential): the per-namespace inventory source below, and passed as
-# `credentials: ["openshift-{{ cluster }}"]` at launch time to "VM Wait For
-# Ready" and "VM Post-Configuration" (see tasks/wait_and_configure_vm.yml).
-# This is what makes pointing this pipeline at a cluster AAP doesn't run on
-# just "add another Credential", not a code change.
+# a different `cluster_name` value can't accidentally use the wrong
+# cluster's credential): the per-namespace inventory source below, and
+# passed as `credentials: ["openshift-{{ cluster_name }}"]` at launch time
+# to "VM Wait For Ready" and "VM Post-Configuration" (see
+# tasks/wait_and_configure_vm.yml). This is what makes pointing this
+# pipeline at a cluster AAP doesn't run on just "add another Credential",
+# not a code change.
 ---
 - name: Create VM request file via IPAM allocation and push to git
   hosts: localhost
@@ -174,10 +187,12 @@
         chdir: "{{ vm_requests_checkout_dir }}"
       no_log: true
 
-    # Named after `namespace`, not `group_name` — the two are allowed to
-    # differ (see the extra_vars example above); namespace is the key the
-    # rest of the provisioning workflow (inventory lookups, post-config) uses
-    # to find a VM's inventory, so it's what this is named after too.
+    # Named "<cluster_name>-<namespace>", not just namespace - namespace
+    # alone isn't unique once this pipeline targets more than one cluster
+    # (two clusters could both have a "vm-example-3" namespace), and a flat
+    # namespace-only name would silently collide/overwrite the wrong
+    # cluster's inventory. cluster_name (not the ArgoCD-reserved `cluster`
+    # field) is what keeps this legible - see the header comment above.
     # Created now even though no VM exists yet - cheap, and it lets the
     # inventory source's own `update_on_launch` handle population later
     # instead of this playbook needing to orchestrate a sync.
@@ -189,9 +204,9 @@
     # automatically when the module params are omitted. Passing
     # "{{ controller_host }}" etc. here would reference undefined Jinja
     # vars, not the injected env vars - this is the actual, working pattern.
-    - name: Ensure an AAP Inventory exists for this namespace
+    - name: Ensure an AAP Inventory exists for this cluster/namespace
       ansible.controller.inventory:
-        name: "{{ namespace }}"
+        name: "{{ cluster_name }}-{{ namespace }}"
         organization: "Default"
         state: present
         validate_certs: "{{ controller_validate_certs }}"
@@ -217,11 +232,11 @@
     # because nothing had launched against it yet).
     - name: Ensure a dynamic inventory source discovers this namespace's VMs
       ansible.controller.inventory_source:
-        name: "{{ namespace }}-openshift-virtualization"
-        inventory: "{{ namespace }}"
+        name: "{{ cluster_name }}-{{ namespace }}-openshift-virtualization"
+        inventory: "{{ cluster_name }}-{{ namespace }}"
         organization: "Default"
         source: "openshift_virtualization"
-        credential: "openshift-{{ cluster }}"
+        credential: "openshift-{{ cluster_name }}"
         execution_environment: "Day 2 EE"
         update_on_launch: true
         # Controller's default (false) makes syncs additive-only - a VM

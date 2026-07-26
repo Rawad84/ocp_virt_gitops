@@ -12,10 +12,11 @@
 #     -e controller_username=admin \
 #     -e controller_password=<...>
 #
-# Credentials referenced below (git-push-token, vm-ssh-key, openshift-in-cluster,
-# controller-api) are created as placeholders here — fill in real secret
-# values through the Controller UI/API, not by committing them to this file.
-# bluecat-api is deliberately NOT created here - see the task below.
+# Credentials referenced below (git-push-token, vm-ssh-key,
+# openshift-<cluster_name>, controller-api) are created as placeholders
+# here — fill in real secret values through the Controller UI/API, not by
+# committing them to this file. bluecat-api is deliberately NOT created
+# here - see the task below.
 ---
 - name: Configure AAP Controller for the VM intake / post-config pipeline
   hosts: localhost
@@ -70,13 +71,16 @@
     # CONTROLLER_SETUP.md "Skipped for now") once use_ipam: true is tested.
 
     # Backs the per-namespace inventory sources that intake_create_vm_request.yml
-    # creates (source: openshift_virtualization). Named for the "in-cluster"
-    # test scenario used throughout this repo; managing a cluster AAP doesn't
-    # run on just means creating another "openshift-<cluster>" credential
-    # here, no code change.
+    # creates (source: openshift_virtualization), and the openshift-{{ cluster_name }}
+    # credential passed at launch time to "VM Wait For Ready"/"VM
+    # Post-Configuration" (see tasks/wait_and_configure_vm.yml). Named for
+    # cluster_name, not the ArgoCD-reserved `cluster` field - see
+    # intake_create_vm_request.yml's header for why. Run this playbook again
+    # with -e cluster_name=<new-cluster-name> to onboard another cluster; no
+    # code change needed beyond that.
     - name: Create OpenShift/Kubernetes credential placeholder for VM inventory discovery
       ansible.controller.credential:
-        name: "openshift-in-cluster"
+        name: "openshift-{{ cluster_name | default('cluster-fq2h5') }}"
         organization: "Default"
         credential_type: "OpenShift or Kubernetes API Bearer Token"
         controller_host: "{{ controller_host }}"
@@ -120,9 +124,10 @@
         # No cluster-API credential here - this playbook never talks to the
         # cluster directly, it launches "VM Wait For Ready" and "VM
         # Post-Configuration" (see tasks/wait_and_configure_vm.yml), each of
-        # which is given "openshift-{{ cluster }}" by name at launch time.
-        # Keeps "point this pipeline at a different cluster = create another
-        # openshift-<cluster> credential, no code change" true end to end.
+        # which is given "openshift-{{ cluster_name }}" by name at launch
+        # time. Keeps "point this pipeline at a different cluster = create
+        # another openshift-<cluster_name> credential, no code change" true
+        # end to end.
         # group_name/cluster/namespace/ssh_key/networks/vms differ on every
         # launch and have no defaults in the playbook - without this,
         # Controller silently drops/rejects extra_vars passed at launch
@@ -145,7 +150,7 @@
         credentials:
           - "vm-ssh-key"
         # No cluster-API credential statically attached - the caller passes
-        # "openshift-{{ cluster }}" by name at launch time (see
+        # "openshift-{{ cluster_name }}" by name at launch time (see
         # tasks/wait_and_configure_vm.yml) so this template works unmodified
         # against whatever cluster the request targets. Backs the
         # delegate_to: localhost kubernetes.core tasks (annotation check +
@@ -176,7 +181,7 @@
         inventory: "Demo Inventory"
         execution_environment: "Day 2 EE"
         # No cluster-API credential statically attached - same
-        # "openshift-{{ cluster }}" by-name-at-launch pattern as VM
+        # "openshift-{{ cluster_name }}" by-name-at-launch pattern as VM
         # Post-Configuration above.
         ask_credential_on_launch: true
         ask_variables_on_launch: true

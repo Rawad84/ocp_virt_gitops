@@ -1,4 +1,9 @@
 {{- $_ := required "at least one networks[] entry is required" .Values.networks }}
+{{- $clusterName := required "cluster_name is required" .Values.cluster_name }}
+{{- $bridge := index .Values.bridges $clusterName }}
+{{- if not $bridge }}
+  {{- fail (printf "no bridge configured in values.yaml for cluster_name '%s' - add an entry under bridges: (see values.yaml's own comment)" $clusterName) }}
+{{- end }}
 {{- range .Values.networks }}
 ---
 apiVersion: k8s.cni.cncf.io/v1
@@ -22,7 +27,7 @@ spec:
       "cniVersion": "0.3.1",
       "name": "{{ .name }}",
       "type": "cnv-bridge",
-      "bridge": "{{ required "Values.bridge is required" $.Values.bridge }}"
+      "bridge": "{{ $bridge }}"
       {{- if .vlanID }},
       "vlan": {{ .vlanID }}
       {{- end }}

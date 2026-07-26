@@ -1,10 +1,12 @@
 # Included once per VM in this run's vms_with_ips loop (see
 # intake_create_vm_request.yml) - launches "VM Wait For Ready" for it, then
 # "VM Post-Configuration". Both are launched with credentials:
-# ["openshift-{{ cluster }}"] passed by name at launch time (not a
+# ["openshift-{{ cluster_name }}"] passed by name at launch time (not a
 # statically-attached credential) so this works unmodified against whatever
-# cluster the request targets - same "openshift-<cluster>" naming/lookup
-# convention the inventory_source task above already uses.
+# cluster the request targets - same "openshift-<cluster_name>" naming/lookup
+# convention the inventory_source task above already uses. cluster_name, not
+# the ArgoCD-reserved `cluster` field - see intake_create_vm_request.yml's
+# header for why.
 #
 # VM Post-Configuration's launch-time `credentials` list must include
 # "vm-ssh-key" too, even though it's already statically attached to that
@@ -28,7 +30,7 @@
   ansible.controller.job_launch:
     job_template: "VM Wait For Ready"
     credentials:
-      - "openshift-{{ cluster }}"
+      - "openshift-{{ cluster_name }}"
     extra_vars:
       vm_name: "{{ vm_item.name }}"
       vm_namespace: "{{ namespace }}"
@@ -43,7 +45,7 @@
     inventory: "{{ namespace }}"
     credentials:
       - "vm-ssh-key"
-      - "openshift-{{ cluster }}"
+      - "openshift-{{ cluster_name }}"
     extra_vars:
       vm_name: "{{ vm_item.name }}"
       vm_namespace: "{{ namespace }}"

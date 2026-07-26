@@ -1,6 +1,7 @@
 {# Rendered request file — schema must match charts/vm-request's expectations
    exactly (see requests/group-1/request.yaml for the reference example). #}
 cluster: {{ cluster }}
+cluster_name: {{ cluster_name }}
 namespace: {{ namespace }}
 networks:
 {% for net in render_networks %}

@@ -8,6 +8,7 @@
 # uplink to actually trunk these VLANs for real traffic to route.
 
 cluster: in-cluster
+cluster_name: cluster-fq2h5
 namespace: vm-example
 networks:
   - name: vlan-1412

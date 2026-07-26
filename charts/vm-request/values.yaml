@@ -5,12 +5,20 @@
 
 defaultSize: small
 
-# Linux bridge every VLAN NAD attaches to (see templates/networkattachmentdefinition.yaml).
-# Provisioned out-of-band via a NodeNetworkConfigurationPolicy (nmstate) on
-# every node — this repo does not manage that policy. Confirmed via
-# `oc get nncp` against the target cluster; a different cluster with a
-# differently-named bridge would need this overridden per-Application.
-bridge: br-flat
+# Linux bridge every VLAN NAD attaches to (see templates/networkattachmentdefinition.yaml),
+# keyed by cluster_name (the request file's own clear cluster identifier -
+# see ansible/playbooks/intake_create_vm_request.yml header for why this
+# isn't keyed by `cluster`) because a different cluster can have a
+# differently-named bridge. Provisioned out-of-band via a
+# NodeNetworkConfigurationPolicy (nmstate) on every node of that cluster —
+# this repo does not manage that policy, same as it never managed node-level
+# VLAN-to-uplink mapping. Confirmed via `oc get nncp` against this cluster.
+# A request whose cluster_name has no entry here fails loudly at render time
+# (see networkattachmentdefinition.yaml) rather than silently reusing
+# another cluster's bridge name. Add one entry per cluster as each is
+# onboarded.
+bridges:
+  cluster-fq2h5: br-flat
 
 # CPU/memory injected directly into each VM's spec.domain — no dependency
 # on cluster-provided VirtualMachineClusterInstancetype/Preference objects.

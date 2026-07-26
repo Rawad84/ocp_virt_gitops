@@ -1,4 +1,5 @@
 cluster: in-cluster
+cluster_name: cluster-fq2h5
 namespace: vm-example-3
 networks:
   - name: vlan-1415
