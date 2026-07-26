@@ -37,8 +37,7 @@
 #   use_ipam: false                  # true once ready to test IPAM
 #   ipam_role_name: "netbox"         # or "bluecat" — only matters if use_ipam: true
 #   group_name: "group-2"            # becomes requests/<group_name>/
-#   cluster: "in-cluster"            # ArgoCD destination.name - do not repurpose, see cluster_name below
-#   cluster_name: "cluster-fq2h5"    # clear/human-meaningful cluster identifier, used for AAP-side naming only
+#   cluster_name: "cluster-fq2h5"    # clear cluster identifier - the ONLY cluster input a caller supplies
 #   namespace: "vm-example-2"
 #   ssh_key: "ssh-ed25519 AAAA..."
 #   networks:
@@ -52,16 +51,20 @@
 #   git_push_token — PAT with push access to this repo
 #   controller_host, controller_username, controller_password — this Controller instance's own API
 #
-# `cluster` vs `cluster_name`: `cluster` is Argo CD's own destination
-# identifier (the ApplicationSet passes it straight through as
-# destination.name) - "in-cluster" is Argo CD's reserved name for the
-# cluster it runs on itself, and this field must stay whatever Argo CD
-# actually recognizes, not a human-friendly rename. `cluster_name` is a
-# separate, purely AAP-side label with no Argo CD meaning, used everywhere
-# a clear cluster identifier is needed for naming Controller objects
-# (inventory, credentials) - this is what makes those names
-# multi-cluster-legible even while every environment tested so far still
-# has `cluster: in-cluster`.
+# `cluster` vs `cluster_name`: a caller never supplies `cluster` directly -
+# this playbook resolves it automatically from `cluster_name` via
+# argocd/registered-clusters.yaml (cloned locally along with everything
+# else, see below), failing outright if `cluster_name` isn't listed there.
+# `cluster` is Argo CD's own destination identifier (the ApplicationSet
+# passes it straight through as destination.name) - "in-cluster" is Argo
+# CD's reserved name for the cluster it runs on itself, not a human-chosen
+# name, which is exactly why a caller shouldn't have to know or type it.
+# `cluster_name` has no Argo CD meaning at all; it's used everywhere a
+# clear cluster identifier is needed for naming Controller objects
+# (inventory, credentials) and the chart's per-cluster bridges: map. Both
+# fields still end up written into the committed request.yaml - Argo CD's
+# Git file generator reads `cluster` as a raw key straight off that file,
+# so it has to be there even though nobody types it by hand.
 #
 # Also requires a Credential named "openshift-<cluster_name>" (e.g.
 # "openshift-cluster-fq2h5") to already exist in Controller for whatever
@@ -125,6 +128,29 @@
         dest: "{{ vm_requests_checkout_dir }}"
         version: "{{ vm_requests_branch }}"
         force: true
+
+    # A caller only ever supplies cluster_name (see header comment) - this
+    # is what resolves it to Argo CD's own destination name, reading the
+    # map straight out of this same checkout rather than requiring a
+    # separate lookup mechanism.
+    - name: Load the cluster_name -> Argo CD destination map
+      ansible.builtin.set_fact:
+        _registered_clusters: "{{ (lookup('file', vm_requests_checkout_dir + '/argocd/registered-clusters.yaml') | from_yaml).clusters }}"
+
+    - name: Fail if cluster_name isn't a registered cluster
+      ansible.builtin.fail:
+        msg: >-
+          cluster_name '{{ cluster_name }}' has no entry in
+          argocd/registered-clusters.yaml - add one there (and a matching
+          bridges: entry in charts/vm-request/values.yaml, and an
+          openshift-{{ cluster_name }} Credential in Controller) before
+          submitting a request for it. See README.md "Onboarding a new
+          cluster".
+      when: cluster_name not in _registered_clusters
+
+    - name: Resolve cluster (Argo CD destination.name) from cluster_name
+      ansible.builtin.set_fact:
+        cluster: "{{ _registered_clusters[cluster_name] }}"
 
     # ansible.builtin.template does not create missing destination
     # directories - requests/<group_name>/ won't exist yet for a new group.

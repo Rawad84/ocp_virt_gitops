@@ -1,12 +1,21 @@
-# Allowlist of cluster names known to Argo CD (i.e. already registered via
+# Map of cluster_name (the clear identifier request files use - see
+# ansible/playbooks/intake_create_vm_request.yml header) to the real Argo CD
+# destination name for that cluster (i.e. already registered via
 # `argocd cluster add` or an equivalent cluster Secret in openshift-gitops).
+# "in-cluster" is Argo CD's reserved name for the cluster it runs on itself,
+# not a real registered name.
+#
+# This is what lets a submitted request specify only cluster_name -
+# intake_create_vm_request.yml reads this file (already available locally,
+# it clones this repo) and resolves the matching Argo CD destination name
+# automatically, failing the intake job outright if cluster_name isn't
+# listed here, rather than requiring the submitter to know and correctly
+# type Argo CD's own destination name.
 #
 # Keep this in sync BY HAND whenever a cluster is added to or removed from
-# Argo CD — it is not derived automatically, since CI is not assumed to have
-# credentials to query the Argo CD API or list cluster secrets.
+# Argo CD, and add a matching bridges: entry in
+# charts/vm-request/values.yaml and an openshift-<cluster_name> Credential
+# in Controller - see README.md "Onboarding a new cluster".
 
 clusters:
-  # PLACEHOLDER — "in-cluster" is Argo CD's reserved name for the cluster it
-  # runs on itself. Replace with your real registered cluster name(s) once
-  # confirmed.
-  - in-cluster
+  cluster-fq2h5: in-cluster
