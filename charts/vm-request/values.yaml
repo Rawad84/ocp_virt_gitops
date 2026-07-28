@@ -17,15 +17,16 @@ defaultSize: small
 # networkattachmentdefinition.yaml) rather than silently reusing another
 # cluster's mapping. Add one entry per cluster as each is onboarded.
 #
-# "br-flat" below is carried over from this chart's prior cnv-bridge/Linux
-# bridge approach (where it WAS confirmed via `oc get nncp`) - it is NOT
-# yet confirmed as this cluster's actual OVN bridge-mapping name under the
-# new localnet approach, since that's separate cluster-level configuration
-# that may not exist yet. Verify/reconfigure against the live cluster
-# (`oc get nncp`, or whatever configures ovn-bridge-mappings on this
-# OCP version) before relying on this - see aap/LESSONS_LEARNED.md.
+# Confirmed live against this cluster's actual OVN bridge-mapping (`ovs-vsctl
+# get Open_vSwitch . external_ids` on a worker showed
+# ovn-bridge-mappings="physnet:br-ex") - "physnet" is the mapping name OVN
+# actually knows, NOT "br-flat" (that was a leftover Linux-bridge name from
+# the prior cnv-bridge approach, and caused every VM's pod sandbox to fail
+# with "failed to find OVN bridge-mapping for network: br-flat"). Each new
+# cluster's value must be independently confirmed the same way - see
+# aap/LESSONS_LEARNED.md.
 bridges:
-  cluster-fq2h5: br-flat
+  cluster-fq2h5: physnet
 
 # CPU/memory injected directly into each VM's spec.domain — no dependency
 # on cluster-provided VirtualMachineClusterInstancetype/Preference objects.

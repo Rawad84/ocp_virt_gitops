@@ -26,11 +26,11 @@ spec:
   # handled by cloud-init from the request file, not by an in-cluster IPAM
   # plugin.
   #
-  # NOT yet verified against a live cluster (built while the target cluster
-  # was down) - confirm physicalNetworkName/vlanID/netAttachDefName field
-  # names and cniVersion against this specific OCP version's actual docs
-  # (or an existing working localnet NAD on the cluster, if one exists)
-  # before relying on this in production. See aap/LESSONS_LEARNED.md.
+  # Verified live: field names/cniVersion match a working NAD already on
+  # this cluster. physicalNetworkName must equal the OVN bridge-mapping
+  # NAME (`ovn-bridge-mappings` external-id on each node's OVS), not a
+  # bridge/interface name - see values.yaml's bridges: comment and
+  # aap/LESSONS_LEARNED.md.
   config: |
     {
       "cniVersion": "0.4.0",
