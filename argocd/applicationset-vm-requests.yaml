@@ -9,7 +9,7 @@ spec:
   generators:
     - git:
         repoURL: https://github.com/Rawad84/ocp_virt_gitops.git
-        revision: ocp-test
+        revision: feature/aap-bluecat
         files:
           - path: "requests/**/*.yaml"
   template:
@@ -24,7 +24,7 @@ spec:
         # to be referenced via the second "ref" source below instead of a
         # plain relative path.
         - repoURL: https://github.com/Rawad84/ocp_virt_gitops.git
-          targetRevision: ocp-test
+          targetRevision: feature/aap-bluecat
           path: charts/vm-request
           helm:
             # path.path is the DIRECTORY containing the matched file (the git
@@ -37,7 +37,7 @@ spec:
         # Ref source: same repo/revision, no path — gives $values a repo-root
         # anchor so the chart source above can reach files outside itself.
         - repoURL: https://github.com/Rawad84/ocp_virt_gitops.git
-          targetRevision: ocp-test
+          targetRevision: feature/aap-bluecat
           ref: values
       destination:
         name: "{{.cluster}}"

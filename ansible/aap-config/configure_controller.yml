@@ -33,7 +33,7 @@
         organization: "Default"
         scm_type: git
         scm_url: "https://github.com/Rawad84/ocp_virt_gitops.git"
-        scm_branch: "{{ vm_requests_branch | default('ocp-test') }}"
+        scm_branch: "{{ vm_requests_branch | default('feature/aap-bluecat') }}"
         controller_host: "{{ controller_host }}"
         controller_username: "{{ controller_username }}"
         controller_password: "{{ controller_password }}"

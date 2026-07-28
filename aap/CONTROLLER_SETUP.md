@@ -153,12 +153,32 @@ params, or they'll reference undefined vars instead of picking these up.
 - Name: `controller-api`
 - Organization: `Default`
 - Credential Type: `Red Hat Ansible Automation Platform`
-- Red Hat Ansible Automation Platform (host field): this Controller's own URL
-- Username: `admin` (or whichever account)
-- Password: Controller admin password
-  - For an Operator-deployed instance:
-    `oc get secret aap-controller-admin-password -n aap -o jsonpath='{.data.password}' | base64 -d`
-- OAuth Token: leave blank (mutually exclusive with username/password)
+- Red Hat Ansible Automation Platform (host field): **the Gateway route**
+  (e.g. `https://aap-<env>.apps.<cluster>/`), **not** the standalone
+  Controller-only route (`aap-controller-<env>...`) — confirmed live: the
+  `ansible.controller` collection's internal auth flow (both username/
+  password and OAuth token modes) only succeeds when the request actually
+  goes through Gateway. Hitting the Controller-only route directly 401s for
+  any account except the original bootstrap `admin` user, which happens to
+  be dual-registered in both Gateway's and Controller's identity stores.
+- Username / Password: **any normal Gateway-created user works here** — it
+  does not need to be the bootstrap `admin` account or a superuser. Only
+  needs enough Controller-side permission to create/manage Inventories
+  (Organization Admin, or a narrower Inventory Admin role). This is the
+  credential to actually hand a customer instead of the root admin secret.
+  - Users can only be created via Gateway (`/api/gateway/v1/users/` or the
+    Gateway UI) — Controller's own `/api/v2/users/` rejects creation with
+    "Create this resource via the platform ingress."
+  - The bootstrap admin's password lives in a **different** secret than you
+    might expect: `aap-controller-admin-password` is Controller's own local
+    admin password (works for direct Controller-route API calls, e.g. `oc
+    get secret aap-controller-admin-password -n aap -o jsonpath=...`), while
+    `aap-admin-password` is Gateway's separate admin password. The two
+    "admin" accounts have different passwords — confirmed live, not the same
+    identity.
+- OAuth Token: leave blank (mutually exclusive with username/password) —
+  also confirmed to hit the same Gateway-vs-Controller-route requirement as
+  username/password above, it's not a workaround for the routing issue.
 
 ## 6. Skipped for now — `bluecat-api`
 

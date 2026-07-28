@@ -92,7 +92,7 @@
     use_ipam: false
     ipam_role_name: "netbox"
     vm_requests_repo_url: "https://github.com/Rawad84/ocp_virt_gitops.git"
-    vm_requests_branch: "ocp-test"
+    vm_requests_branch: "feature/aap-bluecat"
     vm_requests_checkout_dir: "/tmp/vm-requests-intake/{{ group_name }}"
     controller_validate_certs: true
 
