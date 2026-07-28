@@ -208,7 +208,7 @@
         git config user.name "AAP VM Intake"
         git add "requests/{{ group_name }}/request.yaml"
         git commit -m "Update VM request: {{ group_name }}"
-        git push "https://x-access-token:{{ git_push_token }}@github.com/Rawad84/ocp_virt_gitops.git" "HEAD:{{ vm_requests_branch }}"
+        git push "{{ vm_requests_repo_url | regex_replace('^https://', 'https://x-access-token:' + git_push_token + '@') }}" "HEAD:{{ vm_requests_branch }}"
       args:
         chdir: "{{ vm_requests_checkout_dir }}"
       no_log: true
