@@ -5,28 +5,14 @@
 
 defaultSize: small
 
-# OVN-Kubernetes physical network name every VLAN NAD's localnet topology
-# maps to (see templates/networkattachmentdefinition.yaml's
-# physicalNetworkName), keyed by cluster_name (the request file's own clear
-# cluster identifier - see ansible/playbooks/intake_create_vm_request.yml
-# header for why this isn't keyed by `cluster`) because a different cluster
-# has its own OVN bridge mapping (ovn-bridge-mappings), provisioned
-# out-of-band on every node - this repo does not manage that, same as it
-# never managed node-level VLAN-to-uplink mapping. A request whose
-# cluster_name has no entry here fails loudly at render time (see
-# networkattachmentdefinition.yaml) rather than silently reusing another
-# cluster's mapping. Add one entry per cluster as each is onboarded.
-#
-# Confirmed live against this cluster's actual OVN bridge-mapping (`ovs-vsctl
-# get Open_vSwitch . external_ids` on a worker showed
-# ovn-bridge-mappings="physnet:br-ex") - "physnet" is the mapping name OVN
-# actually knows, NOT "br-flat" (that was a leftover Linux-bridge name from
-# the prior cnv-bridge approach, and caused every VM's pod sandbox to fail
-# with "failed to find OVN bridge-mapping for network: br-flat"). Each new
-# cluster's value must be independently confirmed the same way - see
-# aap/LESSONS_LEARNED.md.
-bridges:
-  cluster-fq2h5: physnet
+# There used to be a `bridges:` map here (one physicalNetworkName string per
+# cluster_name) that networkattachmentdefinition.yaml looked up at render
+# time. Removed: physicalNetworkName is now always the network's own `name`
+# (see that template's comment) - every onboarded cluster's OVN
+# bridge-mapping must be provisioned one-per-VLAN, named identically to the
+# VLAN's NAD name, so there's nothing left to configure here per cluster.
+# cluster-fq2h5 (this repo's own workshop cluster) does NOT yet meet that
+# contract - see aap/LESSONS_LEARNED.md before testing against it.
 
 # CPU/memory injected directly into each VM's spec.domain — no dependency
 # on cluster-provided VirtualMachineClusterInstancetype/Preference objects.

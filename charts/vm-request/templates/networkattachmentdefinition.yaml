@@ -1,9 +1,4 @@
 {{- $_ := required "at least one networks[] entry is required" .Values.networks }}
-{{- $clusterName := required "cluster_name is required" .Values.cluster_name }}
-{{- $physnet := index .Values.bridges $clusterName }}
-{{- if not $physnet }}
-  {{- fail (printf "no physical network mapping configured in values.yaml for cluster_name '%s' - add an entry under bridges: (see values.yaml's own comment)" $clusterName) }}
-{{- end }}
 {{- range .Values.networks }}
 ---
 apiVersion: k8s.cni.cncf.io/v1
@@ -17,28 +12,33 @@ spec:
   # OVN-Kubernetes native localnet secondary network (type:
   # ovn-k8s-cni-overlay, topology: localnet) - per Red Hat OCP docs
   # ("Configuring multiple networks" > OVN-Kubernetes additional network >
-  # localnet topology). physicalNetworkName must match an OVN bridge
-  # mapping (ovn-bridge-mappings) already configured on every node of this
-  # cluster - provisioned out-of-band (nmstate NodeNetworkConfigurationPolicy
-  # setting that external-id, or equivalent), same as this repo never
-  # managed the previous cnv-bridge approach's Linux bridge or node-level
-  # VLAN-to-uplink mapping either. No ipam stanza — IP assignment is
-  # handled by cloud-init from the request file, not by an in-cluster IPAM
-  # plugin.
+  # localnet topology). No ipam stanza — IP assignment is handled by
+  # cloud-init from the request file, not by an in-cluster IPAM plugin.
   #
-  # Verified live: field names/cniVersion match a working NAD already on
-  # this cluster. physicalNetworkName must equal the OVN bridge-mapping
-  # NAME (`ovn-bridge-mappings` external-id on each node's OVS), not a
-  # bridge/interface name - see values.yaml's bridges: comment and
-  # aap/LESSONS_LEARNED.md.
+  # physicalNetworkName is deliberately omitted - OVN-Kubernetes defaults it
+  # to this NAD's own "name" (confirmed both in OVN-Kubernetes's own docs and
+  # in a real customer NAD example, which likewise omits it). Relies on a
+  # provisioning CONTRACT: every onboarded cluster's OVN bridge-mapping
+  # (ovn-bridge-mappings external-id on each node's OVS, set out-of-band via
+  # a nmstate NodeNetworkConfigurationPolicy or equivalent - this repo does
+  # not manage it) must define one mapping PER VLAN, named identically to
+  # that VLAN's NAD name - see the customer's NNCP: entries like
+  # `{bridge: vm-bridge, localnet: vlan-1412, state: present}`. This is a
+  # deliberate simplification over the prior design (one shared
+  # physicalNetworkName per cluster_name, kept in values.yaml's bridges: map)
+  # which required hand-syncing that map any time a VLAN was added. If a
+  # cluster's bridge-mapping instead uses one shared name for every VLAN
+  # (e.g. this repo's own workshop cluster, cluster-fq2h5, currently
+  # configured with a single "physnet" mapping) it needs matching per-VLAN
+  # mappings added before requests against it will work under this template -
+  # see aap/LESSONS_LEARNED.md.
   config: |
     {
       "cniVersion": "0.4.0",
       "name": "{{ .name }}",
       "type": "ovn-k8s-cni-overlay",
       "topology": "localnet",
-      "netAttachDefName": "{{ $.Values.namespace }}/{{ .name }}",
-      "physicalNetworkName": "{{ $physnet }}"
+      "netAttachDefName": "{{ $.Values.namespace }}/{{ .name }}"
       {{- if .vlanID }},
       "vlanID": {{ .vlanID }}
       {{- end }}
