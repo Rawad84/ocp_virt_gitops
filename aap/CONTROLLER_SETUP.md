@@ -34,8 +34,7 @@ ansible-playbook ansible/aap-config/configure_controller.yml \
 
 `ansible.controller` is a Red Hat certified collection, not on public
 Galaxy - it needs an Automation Hub (console.redhat.com, or a Private
-Automation Hub) configured as a Galaxy source for `ansible-galaxy collection
-install` to actually find it, if there's no Hub reachable from wherever
+Automation Hub) configured as a Galaxy source for `ansible-galaxy collection install` to actually find it, if there's no Hub reachable from wherever
 this runs.
 
 Safe to re-run: every task uses `ansible.controller.*` modules, which are
@@ -49,6 +48,7 @@ The built-in "GitHub Personal Access Token" type stores a token but has no
 injector, so it never reaches the playbook. This custom type fixes that.
 
 **Access → Credential Types → Add**
+
 - Name: `Git Push Token`
 - Input configuration:
   ```yaml
@@ -71,6 +71,7 @@ Reusable script for this: `aap/credential-types/create-git-push-token-type.sh`
 ## 2. Credential — `git-push-token`
 
 **Access → Credentials → Add**
+
 - Name: `git-push-token`
 - Organization: `Default`
 - Credential Type: `Git Push Token` (the one just created)
@@ -81,6 +82,7 @@ Reusable script for this: `aap/credential-types/create-git-push-token-type.sh`
 ## 3. Credential — `vm-ssh-key`
 
 **Access → Credentials → Add**
+
 - Name: `vm-ssh-key`
 - Organization: `Default`
 - Credential Type: `Machine`
@@ -128,6 +130,7 @@ needs this applied there too, it's not automatically present just because
 it's applied elsewhere.
 
 **Access → Credentials → Add**
+
 - Name: `openshift-cluster-fq2h5` (or `openshift-<cluster_name>` for
   whichever cluster this credential backs)
 - Organization: `Default`
@@ -146,6 +149,7 @@ playbook tasks must NOT pass `controller_host`/etc. as explicit module
 params, or they'll reference undefined vars instead of picking these up.
 
 **Access → Credentials → Add**
+
 - Name: `controller-api`
 - Organization: `Default`
 - Credential Type: `Red Hat Ansible Automation Platform`
@@ -173,6 +177,7 @@ does NOT need an `openshift-<cluster_name>` credential attached. See
 `intake_create_vm_request.yml`'s header comment.
 
 **Templates → Add → Job Template**
+
 - Name: `VM Intake`
 - Organization: `Default`
 - Inventory: `Demo Inventory` (or any existing one — doesn't functionally
@@ -204,6 +209,7 @@ Example full launch extra_vars (DHCP mode) — `use_ipam: false` already comes
 from the template default above, the rest gets pasted in at launch time via
 the Prompt on launch field. No `cluster` here - it's resolved automatically
 from `cluster_name` via `argocd/registered-clusters.yaml`:
+
 ```yaml
 group_name: group-3
 cluster_name: cluster-fq2h5
@@ -218,6 +224,7 @@ vms:
 ## 8. Job Template — "VM Post-Configuration"
 
 **Templates → Add → Job Template**
+
 - Name: `VM Post-Configuration`
 - Organization: `Default`
 - Project: `VM GitOps Ansible Content`
@@ -241,6 +248,7 @@ Waits for one VM's guest agent to connect before "VM Post-Configuration"
 runs against it - see `ansible/playbooks/wait_for_vm_ready.yml`.
 
 **Templates → Add → Job Template**
+
 - Name: `VM Wait For Ready`
 - Organization: `Default`
 - Project: `VM GitOps Ansible Content`
