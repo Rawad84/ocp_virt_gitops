@@ -21,3 +21,6 @@ vms:
   - name: test-vm-credcheck3
     size: small
     network: vlan-1415
+  - name: test-vm-credcheck4
+    size: small
+    network: vlan-1415
