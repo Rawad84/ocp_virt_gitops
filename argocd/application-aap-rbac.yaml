@@ -31,3 +31,10 @@ spec:
     automated:
       prune: true
       selfHeal: true
+    syncOptions:
+      # ServiceAccount/ClusterRole/ClusterRoleBinding here live in the "aap"
+      # namespace - CreateNamespace=true so Argo CD doesn't fail with
+      # "namespaces \"aap\" not found" on a cluster where that namespace
+      # isn't already present. Idempotent/un-owned, same as
+      # argocd/applicationset-vm-requests.yaml.
+      - CreateNamespace=true
