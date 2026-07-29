@@ -4,9 +4,10 @@ Manual UI steps to stand up everything `ansible/aap-config/configure_controller.
 would otherwise automate, verified against a live AAP 2.5 instance. All objects
 live under Organization **Default**.
 
-Prerequisite: the **VM GitOps Ansible Content** Project already exists and has
-synced successfully (Source Control Branch: `feature/aap-bluecat`, or whatever
-branch you're testing).
+Step 1 below creates the **VM GitOps Ansible Content** Project. Everything
+after it assumes that Project already exists and has synced successfully
+(Source Control Branch: `feature/aap-bluecat`, or whatever branch you're
+testing).
 
 ## 0. Applying `configure_controller.yml` instead of doing this by hand
 
@@ -42,7 +43,24 @@ idempotent (`state: present` by default) - re-running against an
 already-configured Controller updates in place rather than duplicating
 objects.
 
-## 1. Custom Credential Type — "Git Push Token"
+## 1. Project — "VM GitOps Ansible Content"
+
+**Resources → Projects → Add**
+
+- Name: `VM GitOps Ansible Content`
+- Organization: `Default`
+- Source Control Type: `Git`
+- Source Control URL: `https://github.com/Rawad84/ocp_virt_gitops.git`
+- Source Control Branch/Tag/Commit: `feature/aap-bluecat` (or whatever branch
+  you're testing)
+- Options: leave "Clean", "Delete on Update", "Update Revision on Launch" at
+  their defaults
+
+Save, then click **Sync** and confirm it completes successfully before
+continuing — every Job Template below (steps 8-10) references this Project
+by name, and none of them can run against a Project that hasn't synced yet.
+
+## 2. Custom Credential Type — "Git Push Token"
 
 The built-in "GitHub Personal Access Token" type stores a token but has no
 injector, so it never reaches the playbook. This custom type fixes that.
@@ -68,7 +86,7 @@ injector, so it never reaches the playbook. This custom type fixes that.
 
 Reusable script for this: `aap/credential-types/create-git-push-token-type.sh`
 
-## 2. Credential — `git-push-token`
+## 3. Credential — `git-push-token`
 
 **Access → Credentials → Add**
 
@@ -79,7 +97,7 @@ Reusable script for this: `aap/credential-types/create-git-push-token-type.sh`
   - Scope: Fine-grained PAT limited to this repo, **Contents: Read and write** only.
     Or classic PAT with `public_repo` scope.
 
-## 3. Credential — `vm-ssh-key`
+## 4. Credential — `vm-ssh-key`
 
 **Access → Credentials → Add**
 
@@ -101,7 +119,7 @@ The **public** half of this key must be passed as the `ssh_key` extra_var on
 every VM Intake launch — it's what cloud-init installs into each VM's
 `authorized_keys`. They have to be the matching pair.
 
-## 4. Credential — `openshift-<cluster_name>`
+## 5. Credential — `openshift-<cluster_name>`
 
 Named `openshift-<cluster_name>`, where `cluster_name` is the request file's
 clear, human-meaningful cluster identifier — **not** the ArgoCD-reserved
@@ -139,7 +157,7 @@ it's applied elsewhere.
 - API authentication bearer token: token from the ServiceAccount above
 - Certificate Authority data: leave blank unless using an untrusted custom CA
 
-## 5. Credential — `controller-api`
+## 6. Credential — `controller-api`
 
 Lets the intake playbook's `ansible.controller.inventory` /
 `ansible.controller.inventory_source` tasks authenticate back to this same
@@ -180,12 +198,12 @@ params, or they'll reference undefined vars instead of picking these up.
   also confirmed to hit the same Gateway-vs-Controller-route requirement as
   username/password above, it's not a workaround for the routing issue.
 
-## 6. Skipped for now — `bluecat-api`
+## 7. Skipped for now — `bluecat-api`
 
 Not created while testing with `use_ipam: false` (DHCP mode). Create this
 (Machine type, BlueCat host/user/pass) only when ready to test the IPAM path.
 
-## 7. Job Template — "VM Intake"
+## 8. Job Template — "VM Intake"
 
 This is now the orchestrator for the whole provisioning workflow, not just
 the git-push step: after pushing `request.yaml`, it also launches "VM Wait
@@ -241,7 +259,7 @@ vms:
   - { name: test-vm-1, size: small, network: vlan-1415 }
 ```
 
-## 8. Job Template — "VM Post-Configuration"
+## 9. Job Template — "VM Post-Configuration"
 
 **Templates → Add → Job Template**
 
@@ -262,7 +280,7 @@ vms:
 - Extra variables: check **Prompt on launch** too (`vm_name`/`vm_namespace`
   differ per launch and have no defaults in the playbook)
 
-## 9. Job Template — "VM Wait For Ready"
+## 10. Job Template — "VM Wait For Ready"
 
 Waits for one VM's guest agent to connect before "VM Post-Configuration"
 runs against it - see `ansible/playbooks/wait_for_vm_ready.yml`.
