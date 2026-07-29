@@ -1,0 +1,33 @@
+# Argo CD Application for aap/rbac/ - takes over management of the
+# ServiceAccount + ClusterRole + ClusterRoleBinding backing the
+# "openshift-in-cluster" Credential in AAP Controller (see
+# aap/rbac/vm-inventory-serviceaccount.yaml for details on what these grant
+# and why). Plain directory source, no Helm - nothing here is
+# environment-specific.
+#
+# Bootstrapping: this Application object itself has to be applied once by
+# hand (same as argocd/applicationset-vm-requests.yaml was) - Argo CD can't
+# discover an Application it doesn't already know about:
+#   oc apply -f argocd/application-aap-rbac.yaml
+# From then on, Argo CD owns aap/rbac/ - do not oc apply the RBAC file
+# directly again.
+apiVersion: argoproj.io/v1alpha1
+kind: Application
+metadata:
+  name: aap-rbac
+  namespace: openshift-gitops
+spec:
+  project: default
+  source:
+    repoURL: https://github.com/Rawad84/ocp_virt_gitops.git
+    targetRevision: feature/aap-bluecat
+    path: aap/rbac
+    directory:
+      recurse: true
+  destination:
+    name: in-cluster
+    namespace: aap
+  syncPolicy:
+    automated:
+      prune: true
+      selfHeal: true
