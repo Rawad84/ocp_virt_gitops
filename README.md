@@ -120,6 +120,27 @@ specifically so `openshift-<cluster_name>` can be supplied by name at launch
 time — a static attachment can't vary per request, so a different cluster
 would silently use the wrong one's credential.
 
+## Execution Environment requirements
+
+All three Job Templates run under **`Day 2 EE`** (or an equivalent), which
+must have these collections baked in — the built-in `ansible-galaxy`
+sync at Project-update time does **not** install collections into the EE
+itself, so a collection missing from the EE image fails at job run time,
+not at project sync.
+
+| Collection | Why it's needed | Called directly? |
+|---|---|---|
+| `ansible.controller` | `VM Intake` manages its own Controller objects — Project, Inventory, Inventory Source, and launching the other two Job Templates | Yes — `ansible.controller.project/inventory/inventory_source/job_launch` in `intake_create_vm_request.yml` |
+| `kubernetes.core` | Direct OpenShift/Kubernetes API access (`k8s`, `k8s_info`) | Yes — used across the playbooks; also the only collection pinned in `ansible/requirements.yml` |
+| `kubevirt.core` | AAP's built-in `openshift_virtualization` dynamic inventory source plugin is backed by this collection under the hood | **No** — never called by FQCN in any playbook. It's a transitive runtime dependency of the `source: openshift_virtualization` inventory plugin (`intake_create_vm_request.yml`'s `ansible.controller.inventory_source` task), so it's easy to miss when auditing an EE image — `ansible-galaxy collection list` on the EE is the only reliable way to confirm it's present. |
+
+`kubevirt.core` isn't listed in `ansible/requirements.yml` either — that
+file only covers what the *playbooks themselves* import, not what AAP's
+built-in inventory plugins need at runtime. Before trusting any EE for
+this pipeline, verify all three are actually present in the image (not
+just assumed from its name or base) — see `aap/LESSONS_LEARNED.md` for how
+to build/patch an EE that's missing one and register it in Controller.
+
 ## Onboarding a new cluster
 
 1. **Argo CD**: register the cluster (`argocd cluster add`, or an
