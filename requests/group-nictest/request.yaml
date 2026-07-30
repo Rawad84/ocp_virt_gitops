@@ -12,3 +12,6 @@ vms:
   - name: test-vm-nictest2
     size: small
     skip_second_nic: true
+  - name: test-vm-nictest3
+    size: small
+    skip_second_nic: true
