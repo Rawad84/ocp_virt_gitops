@@ -24,12 +24,5 @@ vms:
 {% if vm.ip is defined and vm.ip %}
     ip: {{ vm.ip }}
 {% endif %}
-{# TEMPORARY: skip_second_nic passthrough for a one-off live EE test against
-   this cluster's missing vlan-1415 OVN bridge mapping - to be reverted
-   alongside the matching chart change once that test is done. #}
-{% if vm.skip_second_nic is defined and vm.skip_second_nic %}
-    skip_second_nic: true
-{% else %}
     network: {{ vm.network }}
-{% endif %}
 {% endfor %}
