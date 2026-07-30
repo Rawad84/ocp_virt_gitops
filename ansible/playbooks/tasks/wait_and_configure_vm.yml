@@ -9,11 +9,15 @@
 # header for why.
 #
 # VM Post-Configuration's launch-time `credentials` list must include
-# "vm-ssh-key" too, even though it's already statically attached to that
-# template - confirmed live: passing only the cluster credential fails with
-# "Removing Machine credential at launch time without replacement is not
-# supported", because a launch-time `credentials` override has to name the
-# complete desired credential set, not just the delta being added.
+# every credential statically attached to that template too - "vm-ssh-key"
+# and "controller-api" - even though both are already statically attached:
+# a launch-time `credentials` override has to name the complete desired
+# credential set, not just the delta being added, or Controller rejects it
+# with "Removing <credential type> credential at launch time without
+# replacement is not supported". Confirmed live for both: vm-ssh-key
+# (Machine) first, then controller-api (Red Hat Ansible Automation
+# Platform) the first time a VM ever actually reached this task instead of
+# getting stuck earlier in the pipeline.
 #
 # The calling loop wraps this with ignore_errors: true so one VM being
 # slow/stuck doesn't block post-config from still being applied to the
@@ -46,6 +50,7 @@
     credentials:
       - "vm-ssh-key"
       - "openshift-{{ cluster_name }}"
+      - "controller-api"
     extra_vars:
       vm_name: "{{ vm_item.name }}"
       vm_namespace: "{{ namespace }}"
