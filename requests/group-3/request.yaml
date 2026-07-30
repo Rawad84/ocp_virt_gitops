@@ -42,3 +42,6 @@ vms:
   - name: test-vm-eefix
     size: small
     network: vlan-1415
+  - name: test-vm-eefix2
+    size: small
+    network: vlan-1415
