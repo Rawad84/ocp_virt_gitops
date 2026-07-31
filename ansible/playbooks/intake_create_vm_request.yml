@@ -48,7 +48,9 @@
 # Requires (inject via AAP credentials, not extra_vars in plaintext):
 #   netbox_host, netbox_token                                    (netbox backend, use_ipam: true only)
 #   bluecat_host, bluecat_username, bluecat_password, bluecat_configuration  (bluecat backend, use_ipam: true only)
-#   git_push_token — PAT with push access to this repo
+#   git_push_token — PAT with read+push access to this repo (used to
+#     authenticate both the initial clone and the final push - a private
+#     repo will hang on "Clone the GitOps repo" without it)
 #   controller_host, controller_username, controller_password — this Controller instance's own API
 #
 # `cluster` vs `cluster_name`: a caller never supplies `cluster` directly -
@@ -124,10 +126,11 @@
 
     - name: Clone the GitOps repo
       ansible.builtin.git:
-        repo: "{{ vm_requests_repo_url }}"
+        repo: "{{ vm_requests_repo_url | regex_replace('^https://', 'https://x-access-token:' + git_push_token + '@') }}"
         dest: "{{ vm_requests_checkout_dir }}"
         version: "{{ vm_requests_branch }}"
         force: true
+      no_log: true
 
     # A caller only ever supplies cluster_name (see header comment) - this
     # is what resolves it to Argo CD's own destination name, reading the
