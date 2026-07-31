@@ -2,6 +2,9 @@
 {{- range .Values.vms }}
 {{- $size := .size | default $root.Values.defaultSize }}
 {{- $tier := index $root.Values.sizeTiers $size }}
+{{- $skipSecondNic := .skip_second_nic | default false }}
+{{- $net := dict }}
+{{- if not $skipSecondNic }}
 {{- $netName := .network }}
 {{- if not $netName }}
   {{- if eq (len $root.Values.networks) 1 }}
@@ -10,7 +13,6 @@
     {{- fail (printf "vm %s: 'network' is required when networks[] has more than one entry" .name) }}
   {{- end }}
 {{- end }}
-{{- $net := dict }}
 {{- range $root.Values.networks }}
   {{- if eq .name $netName }}
     {{- $net = . }}
@@ -18,6 +20,7 @@
 {{- end }}
 {{- if not $net.name }}
   {{- fail (printf "vm %s: network '%s' does not match any networks[].name" .name $netName) }}
+{{- end }}
 {{- end }}
 ---
 apiVersion: kubevirt.io/v1
@@ -55,8 +58,14 @@ spec:
                   port: 22
             # eth1: customer VLAN (bridge). Static IP when the request
             # carries one (IPAM path), DHCP otherwise (see networkData below).
+            # TEMPORARY: skip_second_nic (per-vm, undocumented) skips this
+            # interface entirely - added for a one-off live test of a
+            # cluster missing the vlan-1415 OVN bridge mapping, to be
+            # reverted once that test is done. Not a supported request field.
+            {{- if not $skipSecondNic }}
             - name: {{ $net.name }}
               bridge: {}
+            {{- end }}
           disks:
             - name: rootdisk
               disk:
@@ -67,9 +76,11 @@ spec:
       networks:
         - name: default
           pod: {}
+        {{- if not $skipSecondNic }}
         - name: {{ $net.name }}
           multus:
             networkName: {{ $net.name }}
+        {{- end }}
       volumes:
         - name: rootdisk
           dataVolume:
@@ -87,6 +98,7 @@ spec:
                 ethernets:
                   eth0:
                     dhcp4: true
+                  {{- if not $skipSecondNic }}
                   eth1:
                     {{- if .ip }}
                     addresses:
@@ -97,4 +109,5 @@ spec:
                     {{- else }}
                     dhcp4: true
                     {{- end }}
+                  {{- end }}
 {{- end }}
