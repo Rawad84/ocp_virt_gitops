@@ -141,7 +141,7 @@
         dest: "{{ vm_requests_git_root }}"
         version: "{{ vm_requests_branch }}"
         force: true
-      no_log: true
+      #no_log: true
 
     # A caller only ever supplies cluster_name (see header comment) - this
     # is what resolves it to Argo CD's own destination name, reading the
@@ -221,8 +221,12 @@
         git config user.email "aap-intake@example.internal"
         git config user.name "AAP VM Intake"
         git add "{{ (vm_requests_repo_subdir + '/') if vm_requests_repo_subdir else '' }}requests/{{ group_name }}/request.yaml"
-        git commit -m "Update VM request: {{ group_name }}"
-        git push "{{ vm_requests_repo_url | regex_replace('^https://', 'https://x-access-token:' + git_push_token + '@') }}" "HEAD:{{ vm_requests_branch }}"
+        if git diff --cached --quiet; then
+          echo "request.yaml already matches what's committed - nothing to push, likely a rerun after a downstream step failed"
+        else
+          git commit -m "Update VM request: {{ group_name }}"
+          git push "{{ vm_requests_repo_url | regex_replace('^https://', 'https://x-access-token:' + git_push_token + '@') }}" "HEAD:{{ vm_requests_branch }}"
+        fi
       args:
         chdir: "{{ vm_requests_git_root }}"
       no_log: true
