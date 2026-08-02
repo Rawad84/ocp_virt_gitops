@@ -40,7 +40,10 @@
       vm_namespace: "{{ namespace }}"
       vm_ready_max_retries: "{{ vm_ready_max_retries }}"
       vm_ready_retry_delay_seconds: "{{ vm_ready_retry_delay_seconds }}"
-      vm_ssh_network_name: "{{ vm_ssh_network_name }}"
+      # This VM's own network, not a fixed value - a request can mix VMs
+      # across several VLANs, so there's no single name that would be
+      # correct for all of them. "" (pod network) when the toggle is off.
+      vm_ssh_network_name: "{{ vm_item.network if vm_ssh_via_vm_network else '' }}"
     wait: true
     validate_certs: "{{ controller_validate_certs }}"
 
