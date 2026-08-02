@@ -108,6 +108,11 @@
     # since they operate on the repo as a whole rather than its content.
     vm_requests_checkout_dir: "{{ vm_requests_git_root }}{{ '/' + vm_requests_repo_subdir if vm_requests_repo_subdir else '' }}"
     controller_validate_certs: true
+    # Must already exist in Controller with kubevirt.core/kubernetes.core
+    # installed - "Day 2 EE" is this workshop's own build (see
+    # aap/LESSONS_LEARNED.md); substitute whatever equivalent EE exists on
+    # the target Controller instance.
+    vm_intake_execution_environment: "Day 2 EE"
 
   tasks:
     # include_tasks (dynamic) evaluates its own `when` exactly once, before
@@ -281,7 +286,7 @@
         organization: "Default"
         source: "openshift_virtualization"
         credential: "openshift-{{ cluster_name }}"
-        execution_environment: "Day 2 EE"
+        execution_environment: "{{ vm_intake_execution_environment }}"
         update_on_launch: true
         # Controller's default (false) makes syncs additive-only - a VM
         # deleted from the cluster (e.g. by editing request.yaml and letting
