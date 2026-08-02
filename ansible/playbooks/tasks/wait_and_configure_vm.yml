@@ -58,5 +58,10 @@
     extra_vars:
       vm_name: "{{ vm_item.name }}"
       vm_namespace: "{{ namespace }}"
+      # Same per-VM network as above, not the namespace-wide inventory
+      # source's single network_name - a namespace can mix VMs across
+      # several VLANs, so postconfig.yml resolves its own connection IP
+      # per-VM instead of trusting the shared inventory source for it.
+      vm_ssh_network_name: "{{ vm_item.network if vm_ssh_via_vm_network else '' }}"
     wait: true
     validate_certs: "{{ controller_validate_certs }}"

@@ -123,13 +123,9 @@
     # across several VLANs (each vms: entry has its own `network:`), so
     # there's no single correct value to hardcode here. When true, each VM
     # automatically uses its OWN `network:` field instead (see vm_item.network
-    # in tasks/wait_and_configure_vm.yml) - this only toggles which of the
-    # two (pod network vs. that per-VM value) wait_for_vm_ready.yml uses.
-    #
-    # Does NOT extend to the dynamic inventory feeding postconfig.yml's SSH
-    # connection - that source is per-namespace, not per-VM, so a single
-    # network_name there can't correctly vary per VM if a namespace mixes
-    # VLANs. Unresolved for that mixed case - see conversation.
+    # in tasks/wait_and_configure_vm.yml), for both wait_for_vm_ready.yml and
+    # postconfig.yml (which resolves its own per-VM IP independently of the
+    # namespace-wide dynamic inventory - see postconfig.yml's first play).
     vm_ssh_via_vm_network: false
 
   tasks:
@@ -314,19 +310,16 @@
         # alongside a genuinely new one. overwrite: true makes each sync a
         # true mirror of what's actually in the namespace.
         overwrite: true
-        # KNOWN LIMITATION: this inventory source is per-namespace, not
-        # per-VM, so network_name can only be one value - unlike
-        # wait_for_vm_ready.yml (fully per-VM via vm_item.network), this
-        # can't correctly vary per VM if a namespace ever mixes VLANs across
-        # VMs. Best-effort: uses this run's first new VM's network. Also
-        # overwrites whatever network_name a *previous* run in this same
-        # namespace set, if that run's first VM was on a different VLAN -
-        # fine while a namespace's VMs all share one VLAN (the assumed
-        # common case), wrong otherwise. Revisit if that assumption breaks.
-        source_vars: >-
-          {{ {'namespaces': [namespace]}
-             | combine({'network_name': vms_with_ips[0].network}
-                       if (vm_ssh_via_vm_network and vms_with_ips | length > 0) else {}) }}
+        # No network_name here - this source is per-namespace, not per-VM,
+        # so it can't correctly pick one network for every VM if a
+        # namespace mixes VMs across several VLANs. postconfig.yml doesn't
+        # rely on this source's ansible_host for connectivity at all
+        # because of that - it resolves and overrides its own per-VM via
+        # add_host (see postconfig.yml's first play). This source still
+        # matters for discovering/creating the host entries themselves.
+        source_vars:
+          namespaces:
+            - "{{ namespace }}"
         state: present
         validate_certs: "{{ controller_validate_certs }}"
 

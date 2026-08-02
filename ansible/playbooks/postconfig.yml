@@ -21,17 +21,64 @@
 # requirements (packages, users, hardening, whatever) haven't been defined
 # yet. Fill in real tasks in the marked block below once they are.
 #
-# Expected extra_vars: vm_name, vm_namespace
+# Expected extra_vars: vm_name, vm_namespace, vm_ssh_network_name
 #
-# Connectivity to the VM itself comes from the per-namespace dynamic
-# inventory (see intake_create_vm_request.yml), already synced via its
-# update_on_launch setting. The openshift_virtualization inventory plugin
-# names hosts "<namespace>-<vm-name>", not the bare VM name - confirmed
-# against the live inventory (e.g. "vm-example-3-test-vm-5") - so `hosts:`
-# below must reconstruct that, not use vm_name alone. ansible_user /
-# ansible_ssh_private_key_file come from the vm-ssh-key Machine credential
-# attached to the "VM Post-Configuration" Job Template.
+# The per-namespace dynamic inventory (see intake_create_vm_request.yml)
+# only supports one network_name for every VM it discovers in that
+# namespace - wrong for any VM not on that one chosen VLAN if a namespace
+# mixes VMs across several. So this playbook does NOT trust that
+# inventory's ansible_host: the first play below looks up this specific
+# VM's own interface directly (same technique as wait_for_vm_ready.yml) and
+# overrides ansible_host for just this host via add_host before the second
+# play connects. The inventory is still what's asked for by
+# `hosts: "<namespace>-<vm-name>"` name/existence and for ansible_user /
+# ansible_ssh_private_key_file, which come from the vm-ssh-key Machine
+# credential attached to the "VM Post-Configuration" Job Template (applied
+# job-wide, not per-inventory-host, so an add_host-created override still
+# gets them).
 ---
+- name: "Resolve {{ vm_name }}'s actual connection IP for its own network"
+  hosts: localhost
+  connection: local
+  gather_facts: false
+
+  vars:
+    # Mirrors wait_for_vm_ready.yml's _vm_ssh_interface_name - "default"
+    # (pod network) unless a specific network was passed.
+    _vm_ssh_interface_name: "{{ vm_ssh_network_name | default('') or 'default' }}"
+
+  tasks:
+    - name: "Look up {{ vm_name }}'s VMI to find its {{ _vm_ssh_interface_name }} interface"
+      kubernetes.core.k8s_info:
+        api_version: kubevirt.io/v1
+        kind: VirtualMachineInstance
+        name: "{{ vm_name }}"
+        namespace: "{{ vm_namespace }}"
+      register: _vmi_lookup
+
+    # Already confirmed reachable by "VM Wait For Ready" before this
+    # playbook is ever launched (see tasks/wait_and_configure_vm.yml) - a
+    # missing interface here means something changed the VM between then
+    # and now, worth a clear failure rather than a cryptic Jinja error.
+    - name: "Fail clearly if {{ _vm_ssh_interface_name }} interface/IP isn't there"
+      ansible.builtin.fail:
+        msg: >-
+          VMI {{ vm_namespace }}/{{ vm_name }} has no '{{ _vm_ssh_interface_name }}'
+          interface with an IP right now, even though VM Wait For Ready
+          already confirmed one - was the VM restarted in between?
+      when: >-
+        _vmi_lookup.resources | default([]) | length == 0
+        or (_vmi_lookup.resources[0].status.interfaces | default([])
+            | selectattr('name', 'equalto', _vm_ssh_interface_name)
+            | map(attribute='ipAddress', default='') | select('ne', '') | list | length == 0)
+
+    - name: "Override ansible_host for {{ vm_namespace }}-{{ vm_name }} with its real IP"
+      ansible.builtin.add_host:
+        name: "{{ vm_namespace }}-{{ vm_name }}"
+        ansible_host: >-
+          {{ (_vmi_lookup.resources[0].status.interfaces
+              | selectattr('name', 'equalto', _vm_ssh_interface_name) | map(attribute='ipAddress') | first) }}
+
 - name: Post-configure a freshly provisioned VM (once-only per VM)
   hosts: "{{ vm_namespace }}-{{ vm_name }}"
   gather_facts: false
