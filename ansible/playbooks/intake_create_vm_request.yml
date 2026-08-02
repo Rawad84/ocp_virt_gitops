@@ -95,7 +95,18 @@
     ipam_role_name: "netbox"
     vm_requests_repo_url: "https://github.com/Rawad84/ocp_virt_gitops.git"
     vm_requests_branch: "feature/aap-bluecat"
-    vm_requests_checkout_dir: "/tmp/vm-requests-intake/{{ group_name }}"
+    # Where `git clone` actually checks out to - always the true repo root.
+    vm_requests_git_root: "/tmp/vm-requests-intake/{{ group_name }}"
+    # Set this when this codebase (ansible/, argocd/, charts/, aap/) lives
+    # inside a subfolder of the target repo rather than at its root - e.g.
+    # a customer repo that holds other unrelated content alongside it. Leave
+    # "" when this codebase IS the repo root (this fork's own layout).
+    # No leading/trailing slash - e.g. "gitops-code", not "/gitops-code/".
+    vm_requests_repo_subdir: ""
+    # Every other task below reads/writes argocd/ and requests/ through
+    # this - only the clone/push tasks need vm_requests_git_root directly,
+    # since they operate on the repo as a whole rather than its content.
+    vm_requests_checkout_dir: "{{ vm_requests_git_root }}{{ '/' + vm_requests_repo_subdir if vm_requests_repo_subdir else '' }}"
     controller_validate_certs: true
 
   tasks:
@@ -127,7 +138,7 @@
     - name: Clone the GitOps repo
       ansible.builtin.git:
         repo: "{{ vm_requests_repo_url | regex_replace('^https://', 'https://x-access-token:' + git_push_token + '@') }}"
-        dest: "{{ vm_requests_checkout_dir }}"
+        dest: "{{ vm_requests_git_root }}"
         version: "{{ vm_requests_branch }}"
         force: true
       no_log: true
@@ -209,11 +220,11 @@
         set -euo pipefail
         git config user.email "aap-intake@example.internal"
         git config user.name "AAP VM Intake"
-        git add "requests/{{ group_name }}/request.yaml"
+        git add "{{ (vm_requests_repo_subdir + '/') if vm_requests_repo_subdir else '' }}requests/{{ group_name }}/request.yaml"
         git commit -m "Update VM request: {{ group_name }}"
         git push "{{ vm_requests_repo_url | regex_replace('^https://', 'https://x-access-token:' + git_push_token + '@') }}" "HEAD:{{ vm_requests_branch }}"
       args:
-        chdir: "{{ vm_requests_checkout_dir }}"
+        chdir: "{{ vm_requests_git_root }}"
       no_log: true
 
     # Named "<cluster_name>-<namespace>", not just namespace - namespace
