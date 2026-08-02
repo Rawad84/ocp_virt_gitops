@@ -17,10 +17,18 @@
   connection: local
   gather_facts: false
 
+  vars:
+    # VMI status.interfaces[].name uses this same string for both the pod
+    # network ("default") and any secondary network (e.g. "vlan-1415") -
+    # see vm_ssh_network_name in intake_create_vm_request.yml for why AAP
+    # running on a separate hub cluster from the VMs needs this set to a
+    # secondary network instead of the pod-network default.
+    _vm_ssh_interface_name: "{{ vm_ssh_network_name | default('') or 'default' }}"
+
   tasks:
     # Also required in the same retry loop, not a separate step: right when
-    # AgentConnected first flips True, the "default" interface entry can
-    # still be missing its ipAddress (the guest agent's DHCP lease report
+    # AgentConnected first flips True, the target interface entry can still
+    # be missing its ipAddress (the guest agent's DHCP lease report
     # populates slightly after the agent connection itself) - confirmed
     # live, a second race one level earlier than the sshd one below.
     # map(attribute='ipAddress', default='') avoids a hard failure on the
@@ -38,7 +46,7 @@
              | selectattr('type', 'equalto', 'AgentConnected')
              | selectattr('status', 'equalto', 'True') | list | length > 0)
         and (_vmi_ready_check.resources[0].status.interfaces | default([])
-             | selectattr('name', 'equalto', 'default')
+             | selectattr('name', 'equalto', _vm_ssh_interface_name)
              | map(attribute='ipAddress', default='') | select('ne', '') | list | length > 0)
       retries: "{{ vm_ready_max_retries | default(60) }}"
       delay: "{{ vm_ready_retry_delay_seconds | default(10) }}"
@@ -49,11 +57,11 @@
     # condition was satisfied on an earlier attempt. Wait for the actual
     # port too, since "ready" for this pipeline means "postconfig.yml can
     # SSH in", not just "the guest agent is up with an IP".
-    - name: "Extract {{ vm_name }}'s pod-network IP"
+    - name: "Extract {{ vm_name }}'s SSH-target IP"
       ansible.builtin.set_fact:
         _vm_pod_ip: >-
           {{ (_vmi_ready_check.resources[0].status.interfaces
-              | selectattr('name', 'equalto', 'default') | map(attribute='ipAddress') | first) }}
+              | selectattr('name', 'equalto', _vm_ssh_interface_name) | map(attribute='ipAddress') | first) }}
 
     - name: "Wait for {{ vm_name }}'s SSH port to accept connections"
       ansible.builtin.wait_for:

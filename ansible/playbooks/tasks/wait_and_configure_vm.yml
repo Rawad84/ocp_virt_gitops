@@ -40,6 +40,7 @@
       vm_namespace: "{{ namespace }}"
       vm_ready_max_retries: "{{ vm_ready_max_retries }}"
       vm_ready_retry_delay_seconds: "{{ vm_ready_retry_delay_seconds }}"
+      vm_ssh_network_name: "{{ vm_ssh_network_name }}"
     wait: true
     validate_certs: "{{ controller_validate_certs }}"
 

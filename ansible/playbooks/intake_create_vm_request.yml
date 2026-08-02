@@ -113,6 +113,18 @@
     # aap/LESSONS_LEARNED.md); substitute whatever equivalent EE exists on
     # the target Controller instance.
     vm_intake_execution_environment: "Day 2 EE"
+    # Set this to the name of one of this request's networks (e.g.
+    # "vlan-1415", matching a networks: entry above) when AAP's execution
+    # environment runs on a separate hub cluster from the one hosting these
+    # VMs - the pod-network IP (this playbook's default) is a cluster-
+    # internal overlay address, only reachable when AAP runs in-cluster with
+    # the VMs (the original single-cluster workshop setup). Leave "" to keep
+    # using the pod network. Threaded through to both the dynamic
+    # inventory's ansible_host selection (network_name source_var below) and
+    # wait_for_vm_ready.yml's interface filter - VMI status.interfaces[].name
+    # uses this same string for both the pod network ("default") and any
+    # secondary network, so one var drives both consistently.
+    vm_ssh_network_name: ""
 
   tasks:
     # include_tasks (dynamic) evaluates its own `when` exactly once, before
@@ -296,9 +308,12 @@
         # alongside a genuinely new one. overwrite: true makes each sync a
         # true mirror of what's actually in the namespace.
         overwrite: true
-        source_vars:
-          namespaces:
-            - "{{ namespace }}"
+        # network_name only included when vm_ssh_network_name is set - the
+        # plugin's own default (pod network) kicks in when the key is absent
+        # entirely, not when it's present-but-empty.
+        source_vars: >-
+          {{ {'namespaces': [namespace]}
+             | combine({'network_name': vm_ssh_network_name} if vm_ssh_network_name else {}) }}
         state: present
         validate_certs: "{{ controller_validate_certs }}"
 
