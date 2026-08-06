@@ -87,14 +87,29 @@ spec:
                 ethernets:
                   eth0:
                     dhcp4: true
+                    # Pod network must never win the default route: it's only
+                    # here so AAP always has a reachable fallback path (see
+                    # the comment on the interfaces list above), not for
+                    # general egress. Left as the default route, a reply to
+                    # a connection made over the VLAN NIC below goes out via
+                    # eth0 instead - asymmetric routing that gets the VM
+                    # marked unreachable. Metric kept higher (worse) than
+                    # eth1's so eth1 always wins.
+                    dhcp4-overrides:
+                      route-metric: 200
                   eth1:
                     {{- if .ip }}
                     addresses:
                       - {{ .ip }}/{{ $net.prefixLength | default 24 }}
                     {{- if $net.gateway }}
-                    gateway4: {{ $net.gateway }}
+                    routes:
+                      - to: default
+                        via: {{ $net.gateway }}
+                        metric: 100
                     {{- end }}
                     {{- else }}
                     dhcp4: true
+                    dhcp4-overrides:
+                      route-metric: 100
                     {{- end }}
 {{- end }}
