@@ -50,7 +50,11 @@
 - name: "Launch VM Post-Configuration for {{ vm_item.name }}"
   ansible.controller.job_launch:
     job_template: "VM Post-Configuration"
-    inventory: "{{ namespace }}"
+    # Must match the "<cluster_name>-<namespace>" naming this same run
+    # already created the inventory under (see intake_create_vm_request.yml's
+    # "Ensure an AAP Inventory exists" task) - namespace alone doesn't exist
+    # as an inventory name and the lookup returns 0 results.
+    inventory: "{{ cluster_name }}-{{ namespace }}"
     credentials:
       - "vm-ssh-key"
       - "openshift-{{ cluster_name }}"
